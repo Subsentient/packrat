@@ -1,0 +1,7 @@
+src/*.o
+src/*.gch
+src/substrings/libsubstrings.*
+src/substrings/*.o
+src/substrings/*.gch
+packrat
+
