@@ -21,7 +21,9 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <stdbool.h>
 #define CONFIGFILE_PATH "/etc/packrat.conf"
 
-
+//Functions
+bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize);
+bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
 //Globals
 extern char Arch[8][64];
 #endif //_PACKRAT_H_

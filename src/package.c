@@ -18,13 +18,16 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <time.h>
+#include <dirent.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include "packrat.h"
 #include "substrings/substrings.h"
 
-bool ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize)
+
+bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize)
 {	
 	//Build some random numbers to use as part of the temp directory name.
 	unsigned DirNum1 = rand();
@@ -33,7 +36,7 @@ bool ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned Pk
 	
 	char DirPath[4096];
 	//Put the temp directory name together
-	snprintf(DirPath, sizeof DirPath, "/tmp/packrat_pkg_%u.%u.%u", DirNum1, DirNum2, DirNum3);
+	snprintf(DirPath, sizeof DirPath, "/var/packrat/cache/packrat_pkg_%u.%u.%u", DirNum1, DirNum2, DirNum3);
 	
 	///Send the directory path back to the caller.
 	SubStrings.Copy(PkgDirPath, DirPath, PkgDirPathSize);
@@ -77,4 +80,93 @@ bool ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned Pk
 	return WEXITSTATUS(RawExitStatus) == 0;
 }
 
+bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize)
+{ //Basically just a wrapper function to easily read in the ascii from a package config file.
+	char Path[4096];
+	
+	snprintf(Path, sizeof Path, "%s/%s", DirPath, File);
+	
+	struct stat FileStat;
+	
+	if (stat(Path, &FileStat) != 0)
+	{
+		return false;
+	}
+	
+	FILE *Descriptor = fopen(Path, "rb");
+	
+	if (!Descriptor) return false;
+	
+	char *FileBuf = calloc(FileStat.st_size + 1, 1);
+	fread(FileBuf, 1, FileStat.st_size, Descriptor);
+	fclose(Descriptor);
+	
+	SubStrings.StripTrailingChars(FileBuf, "\r\n");
+	
+	SubStrings.Copy(Data, FileBuf, DataOutSize);
+	
+	free(FileBuf);
+	
+	return true;
+}
 
+bool Package_BuildFileList(const char *Directory_, FILE *OutDesc)
+{
+	struct dirent *File = NULL;
+	DIR *CurDir = NULL;
+	struct stat FileStat;
+	
+	char Directory[8192];
+
+	SubStrings.Copy(Directory, Directory_, sizeof Directory);
+	
+	if (!(CurDir = opendir(Directory)))
+	{
+		fputs("Failed to opendir()\n", stderr);
+		return false;
+	}
+	
+	
+	//This MUST go below the opendir() call! It wants slashes!
+	SubStrings.StripTrailingChars(Directory, "/");
+	
+	
+	char OutStream[8192];
+	char NewPath[8192];
+	while ((File = readdir(CurDir)))
+	{
+		if (!strcmp(File->d_name, ".") || !strcmp(File->d_name, "..")) continue;
+		
+		snprintf(NewPath, sizeof NewPath, "%s/%s", Directory,  File->d_name);
+		
+		if (lstat(NewPath, &FileStat) != 0)
+		{
+			continue;
+		}
+		
+		if (S_ISDIR(FileStat.st_mode))
+		{ //It's a directory.
+
+			snprintf(OutStream, sizeof OutStream, "d %s/%s\n", Directory,  File->d_name);
+			fwrite(OutStream, 1, strlen(OutStream), OutDesc); //Write the directory name.
+			
+			//Now we recurse and call the same function to process the subdir.
+			
+			if (!Package_BuildFileList(NewPath, OutDesc))
+			{
+				closedir(CurDir);
+				return false;
+			}
+			continue;
+		}
+		//It's a file.
+		snprintf(OutStream, sizeof OutStream, "f %s/%s\n", Directory, File->d_name);
+		
+		fwrite(OutStream, 1, strlen(OutStream), OutDesc);
+		
+	}
+	
+	closedir(CurDir);
+	
+	return true;
+}
