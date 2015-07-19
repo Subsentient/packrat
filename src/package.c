@@ -26,6 +26,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "packrat.h"
 #include "substrings/substrings.h"
 
+static bool Package_BuildFileList(const char *Directory_, FILE *OutDesc);
 
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize)
 {	
@@ -110,7 +111,7 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 	return true;
 }
 
-bool Package_BuildFileList(const char *Directory_, FILE *OutDesc)
+static bool Package_BuildFileList(const char *Directory_, FILE *OutDesc)
 {
 	struct dirent *File = NULL;
 	DIR *CurDir = NULL;
