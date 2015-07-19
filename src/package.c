@@ -111,7 +111,7 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 	return true;
 }
 
-static bool Package_BuildFileList(const char *Directory_, FILE *OutDesc)
+static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc)
 {
 	struct dirent *File = NULL;
 	DIR *CurDir = NULL;
