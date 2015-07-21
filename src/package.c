@@ -26,7 +26,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "packrat.h"
 #include "substrings/substrings.h"
 
-static bool Package_BuildFileList(const char *Directory_, FILE *OutDesc);
+static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath);
 
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize)
 {	
@@ -111,7 +111,7 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 	return true;
 }
 
-static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc)
+static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath)
 {
 	struct dirent *File = NULL;
 	DIR *CurDir = NULL;
@@ -138,7 +138,8 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 	{
 		if (!strcmp(File->d_name, ".") || !strcmp(File->d_name, "..")) continue;
 		
-		snprintf(NewPath, sizeof NewPath, "%s/%s", Directory,  File->d_name);
+		if (FullPath) snprintf(NewPath, sizeof NewPath, "%s/%s", Directory,  File->d_name);
+		else snprintf(NewPath, sizeof NewPath, "%s", File->d_name);
 		
 		if (lstat(NewPath, &FileStat) != 0)
 		{
@@ -147,13 +148,13 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		
 		if (S_ISDIR(FileStat.st_mode))
 		{ //It's a directory.
-
-			snprintf(OutStream, sizeof OutStream, "d %s/%s\n", Directory,  File->d_name);
+			
+			snprintf(OutStream, sizeof OutStream, "d %s\n", NewPath);
 			fwrite(OutStream, 1, strlen(OutStream), OutDesc); //Write the directory name.
 			
 			//Now we recurse and call the same function to process the subdir.
 			
-			if (!Package_BuildFileList(NewPath, OutDesc))
+			if (!Package_BuildFileList(NewPath, OutDesc, true))
 			{
 				closedir(CurDir);
 				return false;
@@ -161,8 +162,8 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 			continue;
 		}
 		//It's a file.
-		snprintf(OutStream, sizeof OutStream, "f %s/%s\n", Directory, File->d_name);
 		
+		snprintf(OutStream, sizeof OutStream, "f %s\n", NewPath);
 		fwrite(OutStream, 1, strlen(OutStream), OutDesc);
 		
 	}
@@ -171,3 +172,4 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 	
 	return true;
 }
+
