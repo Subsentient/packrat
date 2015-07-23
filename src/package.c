@@ -23,6 +23,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <dirent.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <openssl/sha.h>
 #include "packrat.h"
 #include "substrings/substrings.h"
 
@@ -110,6 +111,41 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 	
 	return true;
 }
+
+bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize)
+{	
+	if (OutStreamSize < 4096) return false;
+	
+	struct stat FileStat;
+	
+	if (stat(FilePath, &FileStat) != 0) return false;
+	
+	FILE *Descriptor = fopen(FilePath, "rb");
+	
+	unsigned char *Buffer = calloc(FileStat.st_size, 1);
+	fread(Buffer, 1, FileStat.st_size, Descriptor);
+	fclose(Descriptor);
+	
+	unsigned char Hash[SHA512_DIGEST_LENGTH];
+	
+	//Generate the hash.
+	SHA512(Buffer, FileStat.st_size, Hash);
+	
+	int Inc = 0;
+	
+	*OutStream = '\0';
+	
+	for (; Inc < SHA512_DIGEST_LENGTH ; ++Inc)
+	{
+		const unsigned Len = strlen(OutStream);
+		snprintf(OutStream + Len, OutStreamSize - Len, "%x", Hash[Inc]);
+	}
+	
+	free(Buffer);
+	return true;
+}
+		
+
 
 static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath)
 {

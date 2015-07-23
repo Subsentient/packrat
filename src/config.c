@@ -25,7 +25,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 
 //Globals
-char Arch[8][64];
+char SupportedArch[8][64];
 
 //Static function prototypes
 static bool Config_ProcessConfig(const char *ConfigStream);
@@ -94,13 +94,13 @@ static bool Config_ProcessConfig(const char *const ConfigStream)
 static bool Config_AddArch(const char *NewArch)
 {
 	int Inc = 0;
-	const unsigned Max = (sizeof Arch / sizeof *Arch) - 1;
+	const unsigned Max = (sizeof SupportedArch / sizeof *SupportedArch) - 1;
 	
-	for (; *Arch[Inc] != '\0' && Inc < Max; ++Inc);
+	for (; *SupportedArch[Inc] != '\0' && Inc < Max; ++Inc);
 	
 	if (Inc == Max) return false;
 	
-	SubStrings.Copy(Arch[Inc], NewArch, sizeof Arch[Inc]);
+	SubStrings.Copy(SupportedArch[Inc], NewArch, sizeof SupportedArch[Inc]);
 	
 	return true;
 }
@@ -108,11 +108,11 @@ static bool Config_AddArch(const char *NewArch)
 static bool Config_ArchPresent(const char *CheckArch)
 {
 	int Inc = 0;
-	const unsigned Max = (sizeof Arch / sizeof *Arch) - 1;
+	const unsigned Max = (sizeof SupportedArch / sizeof *SupportedArch) - 1;
 
-	for (; *Arch[Inc] != '\0' && Inc < Max; ++Inc)
+	for (; *SupportedArch[Inc] != '\0' && Inc < Max; ++Inc)
 	{
-		if (!strcmp(Arch[Inc], CheckArch)) return true;
+		if (!strcmp(SupportedArch[Inc], CheckArch)) return true;
 	}
 	
 	return false;

@@ -24,6 +24,17 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 //Functions
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize);
 bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
+bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize);
+
+//Structs
+typedef struct PackageJob
+{
+	char Directory[4096];
+	char Arch[64];
+	char PackageID[256];
+	char VersionString[256];
+} PackageJob;
+	
 //Globals
-extern char Arch[8][64];
+extern char SupportedArch[8][64];
 #endif //_PACKRAT_H_
