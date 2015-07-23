@@ -122,14 +122,14 @@ bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned Ou
 	
 	FILE *Descriptor = fopen(FilePath, "rb");
 	
-	unsigned char *Buffer = calloc(FileStat.st_size, 1);
-	fread(Buffer, 1, FileStat.st_size, Descriptor);
+	unsigned const char *Buffer = calloc(FileStat.st_size, 1);
+	fread((void*)Buffer, 1, FileStat.st_size, Descriptor);
 	fclose(Descriptor);
 	
 	unsigned char Hash[SHA512_DIGEST_LENGTH];
 	
 	//Generate the hash.
-	SHA512(Buffer, FileStat.st_size, Hash);
+	SHA512((void*)Buffer, FileStat.st_size, Hash);
 	
 	int Inc = 0;
 	
@@ -141,7 +141,7 @@ bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned Ou
 		snprintf(OutStream + Len, OutStreamSize - Len, "%x", Hash[Inc]);
 	}
 	
-	free(Buffer);
+	free((void*)Buffer);
 	return true;
 }
 		
