@@ -27,6 +27,8 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "packrat.h"
 #include "substrings/substrings.h"
 
+#define SHA1_PER_READ_SIZE 32768
+
 static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath);
 
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize)
@@ -112,36 +114,132 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 	return true;
 }
 
+bool Package_CreatePackage(const char *const Directory, const char *const PackageID, const char *const VersionString)
+{
+	//cd to the new directory.
+	if (chdir(Directory) != 0) return false;
+
+	char PackageFullName[512];
+	
+	//Create a directory for the package.
+	snprintf(PackageFullName, sizeof PackageFullName, "%s_%s", PackageID, VersionString); //Build the name we'll use while we're at it.
+	if (mkdir(PackageFullName, 0755) != 0) return false;
+
+	char PathBuf[4096];
+	
+	//Create a file list for the package.
+	
+	snprintf(PathBuf, sizeof PathBuf, "%s/filelist.txt", PackageFullName); //Build a path.
+	FILE *Desc = fopen(PathBuf, "wb");
+	
+	if (!Desc) return false;
+	
+	//Do the file list creation.
+	if (!Package_BuildFileList(Directory, Desc, false)) return false;
+	
+	fclose(Desc);
+	
+	
+	
+	return true;
+	
+	
+}
+
+bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc)
+{ //Build a checksums file list.
+	struct stat FileStat;
+	
+	if (stat(FileListPath, &FileStat) != 0)
+	{
+		return false;
+	}
+	
+	//Get the file list into memory.
+	FILE *Desc = fopen(FileListPath, "rb");
+	
+	char *Buffer = calloc(FileStat.st_size + 1, 1);
+	fread(Buffer, 1, FileStat.st_size, Desc);
+	fclose(Desc);
+	
+	char LineBuf[4096];
+	char PathBuf[4096];
+	
+	const char *Iter = Buffer;
+	
+	char Checksum[4096];
+	
+	
+	//Iterate over the items in the file list.
+	while (SubStrings.Line.GetLine(LineBuf, sizeof LineBuf, &Iter))
+	{
+		if (*LineBuf == 'd') continue; //We don't deal with directories.
+		
+		const char *LineData = LineBuf + (sizeof "f " - 1);
+		
+		snprintf(PathBuf, sizeof PathBuf, "%s/%s", Directory, LineData);
+		
+		//Build the checksum.
+		if (!Package_MakeFileChecksum(PathBuf, Checksum, sizeof Checksum))
+		{
+			free(Buffer);
+			return false;
+		}
+		
+		//Write the checksum to the output file.
+		fwrite(Checksum, 1, strlen(Checksum), OutDesc);
+		fputc(' ', OutDesc);
+		fwrite(LineData, 1, strlen(LineData), OutDesc);
+		fputc('\n', OutDesc);
+		
+	}
+	
+	free(Buffer);
+	return true;
+}
+	
+	
 bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize)
-{	
+{ //Fairly fast function to get a sha1 of a file.
 	if (OutStreamSize < 4096) return false;
+	
+	unsigned char Hash[SHA_DIGEST_LENGTH];
 	
 	struct stat FileStat;
 	
-	if (stat(FilePath, &FileStat) != 0) return false;
+	if (stat(FilePath, &FileStat) != 0)
+	{
+		return false;
+	}
 	
 	FILE *Descriptor = fopen(FilePath, "rb");
 	
-	unsigned const char *Buffer = calloc(FileStat.st_size, 1);
-	fread((void*)Buffer, 1, FileStat.st_size, Descriptor);
+	SHA_CTX CTX;
+	
+	SHA1_Init(&CTX);
+		
+	unsigned long long SizeToRead = FileStat.st_size >= SHA1_PER_READ_SIZE ? SHA1_PER_READ_SIZE : FileStat.st_size;
+	size_t Read = 0;
+	char ReadBuf[SHA1_PER_READ_SIZE];
+	
+	do
+	{
+		Read = fread(ReadBuf, 1, SizeToRead, Descriptor);
+		if (Read) SHA1_Update(&CTX, ReadBuf, Read);
+	} while(Read > 0);
+	
 	fclose(Descriptor);
 	
-	unsigned char Hash[SHA512_DIGEST_LENGTH];
-	
-	//Generate the hash.
-	SHA512((void*)Buffer, FileStat.st_size, Hash);
-	
-	int Inc = 0;
+	SHA1_Final(Hash, &CTX);
 	
 	*OutStream = '\0';
-	
-	for (; Inc < SHA512_DIGEST_LENGTH ; ++Inc)
+	unsigned Inc = 0;
+	for (; Inc < SHA_DIGEST_LENGTH ; ++Inc)
 	{
 		const unsigned Len = strlen(OutStream);
 		snprintf(OutStream + Len, OutStreamSize - Len, "%x", Hash[Inc]);
 	}
 	
-	free((void*)Buffer);
 	return true;
 }
 		
