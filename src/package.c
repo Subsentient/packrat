@@ -30,6 +30,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #define SHA1_PER_READ_SIZE 32768
 
 static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath);
+static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc);
 
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize)
 {	
@@ -124,18 +125,38 @@ bool Package_CreatePackage(const char *const Directory, const char *const Packag
 	//Create a directory for the package.
 	snprintf(PackageFullName, sizeof PackageFullName, "%s_%s", PackageID, VersionString); //Build the name we'll use while we're at it.
 	if (mkdir(PackageFullName, 0755) != 0) return false;
-
-	char PathBuf[4096];
+	char PackageInfoDir[512];
+	
+	//Create the metadata directory
+	snprintf(PackageInfoDir, sizeof PackageInfoDir, "%s/packrat", PackageFullName);
+	if (mkdir(PackageInfoDir, 0755) != 0) return false;
+	
+	char FileListPath[4096];
+	char ChecksumListPath[4096];
+	
+	//Build a couple paths we'll need
+	snprintf(FileListPath, sizeof FileListPath, "%s/filelist.txt", PackageInfoDir);
+	snprintf(ChecksumListPath, sizeof ChecksumListPath, "%s/checksums.txt", PackageInfoDir);
+	
 	
 	//Create a file list for the package.
-	
-	snprintf(PathBuf, sizeof PathBuf, "%s/filelist.txt", PackageFullName); //Build a path.
-	FILE *Desc = fopen(PathBuf, "wb");
+	FILE *Desc = fopen(FileListPath, "wb");
 	
 	if (!Desc) return false;
 	
 	//Do the file list creation.
 	if (!Package_BuildFileList(Directory, Desc, false)) return false;
+	
+	fclose(Desc);
+	
+	//Build sha1 of everything.
+	if (!(Desc = fopen(ChecksumListPath, "wb"))) return false;
+	
+	//Do the checksum list creation.
+	if (!Package_MakeAllChecksums(Directory, FileListPath, Desc))
+	{
+		return false;
+	}
 	
 	fclose(Desc);
 	
@@ -146,7 +167,7 @@ bool Package_CreatePackage(const char *const Directory, const char *const Packag
 	
 }
 
-bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc)
+static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc)
 { //Build a checksums file list.
 	struct stat FileStat;
 	
@@ -191,7 +212,6 @@ bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, F
 		fputc(' ', OutDesc);
 		fwrite(LineData, 1, strlen(LineData), OutDesc);
 		fputc('\n', OutDesc);
-		
 	}
 	
 	free(Buffer);
@@ -213,6 +233,8 @@ bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned Ou
 	}
 	
 	FILE *Descriptor = fopen(FilePath, "rb");
+	
+	if (!Descriptor) return false;
 	
 	SHA_CTX CTX;
 	
