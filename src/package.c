@@ -115,15 +115,15 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 	return true;
 }
 
-bool Package_CreatePackage(const char *const Directory, const char *const PackageID, const char *const VersionString)
+bool Package_CreatePackage(const PackageJob *Job)
 {
 	//cd to the new directory.
-	if (chdir(Directory) != 0) return false;
+	if (chdir(Job->Directory) != 0) return false;
 
 	char PackageFullName[512];
 	
 	//Create a directory for the package.
-	snprintf(PackageFullName, sizeof PackageFullName, "%s_%s", PackageID, VersionString); //Build the name we'll use while we're at it.
+	snprintf(PackageFullName, sizeof PackageFullName, "%s_%s.%s", Job->PackageID, Job->VersionString, Job->Arch); //Build the name we'll use while we're at it.
 	if (mkdir(PackageFullName, 0755) != 0) return false;
 	char PackageInfoDir[512];
 	
@@ -145,7 +145,7 @@ bool Package_CreatePackage(const char *const Directory, const char *const Packag
 	if (!Desc) return false;
 	
 	//Do the file list creation.
-	if (!Package_BuildFileList(Directory, Desc, false)) return false;
+	if (!Package_BuildFileList(Job->Directory, Desc, false)) return false;
 	
 	fclose(Desc);
 	
@@ -153,7 +153,7 @@ bool Package_CreatePackage(const char *const Directory, const char *const Packag
 	if (!(Desc = fopen(ChecksumListPath, "wb"))) return false;
 	
 	//Do the checksum list creation.
-	if (!Package_MakeAllChecksums(Directory, FileListPath, Desc))
+	if (!Package_MakeAllChecksums(Job->Directory, FileListPath, Desc))
 	{
 		return false;
 	}
