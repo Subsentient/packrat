@@ -18,26 +18,105 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include "substrings/substrings.h"
 #include "packrat.h"
 
-bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite)
-{
-	FILE *In = fopen(Source, "rb");
+
+bool Files_Mkdir(const char *Source, const char *Destination)
+{ //There will be no overwrite option for this one. The directory is probably not empty.
+	struct stat DirStat;
 	
+	//Source doesn't exist.
+	if (stat(Source, &DirStat) != 0) return false;
+	
+	struct stat Temp;
+	//Destination already exists.
+	if (stat(Destination, &Temp) == 0) return false; //I wish I could pass NULL to stat for the second argument. Sometimes I just want to know it exists.
+	
+	return !mkdir(Destination, DirStat.st_mode);
+}
+
+bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite)
+{
+	struct stat LinkStat;
+	
+	if (stat(Source, &LinkStat) != 0) return false;
+	
+	//Not a symlink.
+	if (!S_ISLNK(LinkStat.st_mode)) return false;
+	
+	char Target[4096];
+	
+	//Get the link target.
+	if (readlink(Source, Target, sizeof Target) == -1) return false;
+	
+	//Try and delete any other symlink that has the same name as Destination but possibly different target.
+	struct stat Temp;
+
+	//What to do if our target exists.
+	if (stat(Destination, &Temp) == 0)
+	{
+		//if it's a directory, purge it.
+		if (Overwrite)
+		{
+			if (S_ISDIR(Temp.st_mode))
+			{
+				if (rmdir(Destination) == -1) return false;
+			}
+			else unlink(Destination);
+		}
+		else
+		{
+			return false;
+		}
+	}
+	
+	//Create the link.
+	if (symlink(Target, Destination) == -1)
+	{
+		return false;
+	}
+	
+	//Restore the owner that the original had.
+	lchown(Destination, LinkStat.st_uid, LinkStat.st_gid);
+	
+	return true;
+}
+
+bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite)
+{ //Copies a file preserving its permissions.
+	FILE *In = fopen(Source, "rb");
+
 	if (!In) return false;
 	
 	struct stat FileStat;
+	bool Exists = false;
+	//Destination already exists.
+	if (!Overwrite && (Exists = !stat(Destination, &FileStat))) return false;
 	
-	if (!Overwrite && stat(Destination, &FileStat) == 0) return false;
+	//Delete existing file if present.
+	if (Overwrite && Exists)
+	{
+		if (S_ISDIR(FileStat.st_mode))
+		{
+			if (rmdir(Destination) == -1) return false; //Not empty.
+		}
+		else unlink(Destination);
+	}
 	
 	FILE *Out = fopen(Destination, "wb");
+	
+	if (!Out) return false;
+	
+	//Get permissions and owner from source.
+	if (stat(Source, &FileStat) != 0) return false;
 	
 	//Do the copy.
 	const unsigned SizeToRead = 1024 * 1024; //1MB
 	unsigned AmountRead = 0;
-	char *ReadBuf = malloc(1024 * 1024);
+	char *ReadBuf = malloc(SizeToRead);
 	do
 	{
 		AmountRead = fread(ReadBuf, 1, SizeToRead, In);
@@ -48,5 +127,8 @@ bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite)
 	fclose(In);
 	fclose(Out);
 	
+	//Now we reset the permissions on the destination to match the source.
+	chown(Destination, FileStat.st_uid, FileStat.st_gid); //not using lchmod because we already deleted any symlink that was there before.
+	chmod(Destination, FileStat.st_mode);
 	return true;
 }

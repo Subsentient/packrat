@@ -30,6 +30,8 @@ bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned Ou
 
 //files.c
 bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite);
+bool Files_Mkdir(const char *Source, const char *Destination);
+bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite);
 
 //Structs
 typedef struct Package
