@@ -22,18 +22,23 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #define CONFIGFILE_PATH "/etc/packrat.conf"
 
 //Functions
+
+//package.c
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize);
 bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
 bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize);
 
+//files.c
+bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite);
+
 //Structs
-typedef struct PackageJob
+typedef struct Package
 {
 	char Directory[4096];
 	char Arch[64];
 	char PackageID[256];
 	char VersionString[256];
-} PackageJob;
+} Package;
 	
 //Globals
 extern char SupportedArch[8][64];
