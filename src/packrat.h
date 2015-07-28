@@ -37,8 +37,7 @@ bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwri
 struct PackageList
 {
 	struct Package
-	{
-		char Directory[4096];
+	{ 
 		char Arch[64];
 		char PackageID[256];
 		char VersionString[256];

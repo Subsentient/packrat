@@ -24,6 +24,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <openssl/sha.h>
+#include <errno.h>
 #include "packrat.h"
 #include "substrings/substrings.h"
 
@@ -31,6 +32,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath);
 static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc);
+static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList);
 
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize)
 {	
@@ -115,20 +117,29 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 	return true;
 }
 
-bool Package_CreatePackage(const struct Package *Job)
+bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 {
-	//cd to the new directory.
-	if (chdir(Job->Directory) != 0) return false;
+	//cd to the new directory
 
 	char PackageFullName[512];
-	
 	//Create a directory for the package.
 	snprintf(PackageFullName, sizeof PackageFullName, "%s_%s.%s", Job->PackageID, Job->VersionString, Job->Arch); //Build the name we'll use while we're at it.
-	if (mkdir(PackageFullName, 0755) != 0) return false;
+
+	if (mkdir(PackageFullName, 0755) != 0)
+	{
+		puts(strerror(errno));
+		return false;
+	}
+	char PackageDataPath[512];
+	
+	//Create the files directory.
+	snprintf(PackageDataPath, sizeof PackageDataPath, "%s/files", PackageFullName);
 	char PackageInfoDir[512];
 	
 	//Create the metadata directory
-	snprintf(PackageInfoDir, sizeof PackageInfoDir, "%s/packrat", PackageFullName);
+	snprintf(PackageInfoDir, sizeof PackageInfoDir, "%s/info", PackageFullName);
+	
+	if (mkdir(PackageDataPath, 0755) != 0) return false;
 	if (mkdir(PackageInfoDir, 0755) != 0) return false;
 	
 	char FileListPath[4096];
@@ -145,26 +156,84 @@ bool Package_CreatePackage(const struct Package *Job)
 	if (!Desc) return false;
 	
 	//Do the file list creation.
-	if (!Package_BuildFileList(Job->Directory, Desc, false)) return false;
+	if (!Package_BuildFileList(Directory, Desc, false)) return false;
 	
 	fclose(Desc);
 	
 	//Build sha1 of everything.
 	if (!(Desc = fopen(ChecksumListPath, "wb"))) return false;
-	
 	//Do the checksum list creation.
-	if (!Package_MakeAllChecksums(Job->Directory, FileListPath, Desc))
+	if (!Package_MakeAllChecksums(Directory, FileListPath, Desc))
 	{
 		return false;
 	}
-	
 	fclose(Desc);
 	
-	
-	
+	//Clone files into the new directory.
+	if (!Package_MkPkgCloneFiles(PackageDataPath, Directory, FileListPath))
+	{
+		return false;
+	}
 	return true;
 	
 	
+}
+
+static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList)
+{ //Used when building a package.
+	
+	struct stat FileStat;
+	
+	if (stat(FileList, &FileStat) != 0) return false;
+	
+	FILE *Desc = fopen(FileList, "rb");
+	if (!Desc) return false;
+	
+	char *Buffer = malloc(FileStat.st_size + 1);
+	fread(Buffer, 1, FileStat.st_size, Desc);
+	Buffer[FileStat.st_size] = '\0';
+	fclose(Desc);
+	
+	char Line[4096];
+	
+	const char *Iter = Buffer;
+	
+	char Path1[4096];
+	char Path2[4096];
+	
+	while (SubStrings.Line.GetLine(Line, sizeof Line, &Iter))
+	{
+		const char *LineData = Line + 2;
+		
+		//Incoming path.
+		snprintf(Path1, sizeof Path1, "%s/%s", InputDir, LineData);
+		//Outgoing path.
+		snprintf(Path2, sizeof Path2, "%s/%s", PackageDir, LineData);
+		
+		if (*Line == 'd')
+		{
+			Files_Mkdir(Path1, Path2);
+		}
+		else if (*Line == 'f')
+		{
+			if (stat(Path1, &FileStat) != 0)
+			{
+				free(Buffer);
+				return false;
+			}
+			
+			if (S_ISLNK(FileStat.st_mode))
+			{
+				Files_SymlinkCopy(Path1, Path2, false);
+			}
+			else
+			{
+				Files_FileCopy(Path1, Path2, false);
+			}
+		}
+	}
+	free(Buffer);
+	return true;
 }
 
 static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc)
@@ -283,7 +352,6 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		return false;
 	}
 	
-	
 	//This MUST go below the opendir() call! It wants slashes!
 	SubStrings.StripTrailingChars(Directory, "/");
 	
@@ -294,13 +362,14 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 	{
 		if (!strcmp(File->d_name, ".") || !strcmp(File->d_name, "..")) continue;
 		
-		if (FullPath) snprintf(NewPath, sizeof NewPath, "%s/%s", Directory,  File->d_name);
-		else snprintf(NewPath, sizeof NewPath, "%s", File->d_name);
+		snprintf(NewPath, sizeof NewPath, "%s/%s", Directory,  File->d_name);
 		
 		if (lstat(NewPath, &FileStat) != 0)
 		{
 			continue;
 		}
+		if (!FullPath) snprintf(NewPath, sizeof NewPath, "%s", File->d_name);
+
 		
 		if (S_ISDIR(FileStat.st_mode))
 		{ //It's a directory.
@@ -320,7 +389,7 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		//It's a file.
 		
 		snprintf(OutStream, sizeof OutStream, "f %s\n", NewPath);
-		fwrite(OutStream, 1, strlen(OutStream), OutDesc);
+		fwrite(OutStream, 1, strlen(OutStream), OutDesc); 
 		
 	}
 	
@@ -328,4 +397,22 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 	
 	return true;
 }
+
+
+int main(int argc, char **argv)
+{
+	if (argc < 2)
+	{
+		return false;
+	}
+	
+	struct Package Pkg;
+	
+	SubStrings.Copy(Pkg.Arch, "i586", sizeof Pkg.Arch);
+	SubStrings.Copy(Pkg.PackageID, "farts", sizeof Pkg.PackageID);
+	SubStrings.Copy(Pkg.VersionString, "0.0.0.11", sizeof Pkg.VersionString);
+	
+	return !Package_CreatePackage(&Pkg, argv[1]);
+}
+
 

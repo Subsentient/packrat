@@ -22,7 +22,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <sys/stat.h>
 #include "substrings/substrings.h"
 #include "packrat.h"
-
+ 
 
 bool Files_Mkdir(const char *Source, const char *Destination)
 { //There will be no overwrite option for this one. The directory is probably not empty.
@@ -94,8 +94,11 @@ bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite)
 	struct stat FileStat;
 	bool Exists = false;
 	//Destination already exists.
-	if (!Overwrite && (Exists = !stat(Destination, &FileStat))) return false;
-	
+	if (!Overwrite && (Exists = !stat(Destination, &FileStat)))
+	{
+		fclose(In);
+		return false;
+	}
 	//Delete existing file if present.
 	if (Overwrite && Exists)
 	{
@@ -108,10 +111,18 @@ bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite)
 	
 	FILE *Out = fopen(Destination, "wb");
 	
-	if (!Out) return false;
-	
+	if (!Out)
+	{
+		fclose(In);
+		return false;
+	}
 	//Get permissions and owner from source.
-	if (stat(Source, &FileStat) != 0) return false;
+	if (stat(Source, &FileStat) != 0)
+	{
+		fclose(In);
+		fclose(Out);
+		return false;
+	}
 	
 	//Do the copy.
 	const unsigned SizeToRead = 1024 * 1024; //1MB
