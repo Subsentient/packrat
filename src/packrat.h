@@ -34,13 +34,20 @@ bool Files_Mkdir(const char *Source, const char *Destination);
 bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite);
 
 //Structs
-typedef struct Package
+struct PackageList
 {
-	char Directory[4096];
-	char Arch[64];
-	char PackageID[256];
-	char VersionString[256];
-} Package;
+	struct Package
+	{
+		char Directory[4096];
+		char Arch[64];
+		char PackageID[256];
+		char VersionString[256];
+	} Pkg;
+	
+	struct PackageList *Prev;
+	struct PackageList *Next;
+
+};
 	
 //Globals
 extern char SupportedArch[8][64];

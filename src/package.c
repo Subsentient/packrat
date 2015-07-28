@@ -115,7 +115,7 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 	return true;
 }
 
-bool Package_CreatePackage(const Package *Job)
+bool Package_CreatePackage(const struct Package *Job)
 {
 	//cd to the new directory.
 	if (chdir(Job->Directory) != 0) return false;
