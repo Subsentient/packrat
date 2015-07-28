@@ -328,7 +328,7 @@ bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned Ou
 	for (; Inc < SHA_DIGEST_LENGTH ; ++Inc)
 	{
 		const unsigned Len = strlen(OutStream);
-		snprintf(OutStream + Len, OutStreamSize - Len, "%x", Hash[Inc]);
+		snprintf(OutStream + Len, OutStreamSize - Len, "%02x", Hash[Inc]);
 	}
 	
 	return true;
