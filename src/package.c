@@ -28,7 +28,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "packrat.h"
 #include "substrings/substrings.h"
 
-#define SHA1_PER_READ_SIZE 32768
+#define SHA1_PER_READ_SIZE 1024 * 1024 //1MB
 
 static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath);
 static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc);
@@ -73,7 +73,7 @@ bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, uns
 			_exit(1);
 		}
 		
-		execlp("tar", "tar", "xf", AbsolutePathToPkg, NULL); //This had better be an absolute path.
+		execlp("tar", "tar", "xfp", AbsolutePathToPkg, NULL); //This had better be an absolute path.
 		
 		_exit(1);
 	}
@@ -216,7 +216,7 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 		}
 		else if (*Line == 'f')
 		{
-			if (stat(Path1, &FileStat) != 0)
+			if (lstat(Path1, &FileStat) != 0)
 			{
 				free(Buffer);
 				return false;
@@ -311,7 +311,7 @@ bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned Ou
 		
 	unsigned long long SizeToRead = FileStat.st_size >= SHA1_PER_READ_SIZE ? SHA1_PER_READ_SIZE : FileStat.st_size;
 	size_t Read = 0;
-	char ReadBuf[SHA1_PER_READ_SIZE];
+	char *ReadBuf = malloc(SHA1_PER_READ_SIZE);
 	
 	do
 	{
@@ -319,6 +319,7 @@ bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned Ou
 		if (Read) SHA1_Update(&CTX, ReadBuf, Read);
 	} while(Read > 0);
 	
+	free(ReadBuf);
 	fclose(Descriptor);
 	
 	SHA1_Final(Hash, &CTX);
@@ -356,20 +357,21 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 	SubStrings.StripTrailingChars(Directory, "/");
 	
 	
-	char OutStream[8192];
-	char NewPath[8192];
+	char OutStream[4096];
+	char NewPath[4096], AbsPath[4096];
 	while ((File = readdir(CurDir)))
 	{
 		if (!strcmp(File->d_name, ".") || !strcmp(File->d_name, "..")) continue;
 		
-		snprintf(NewPath, sizeof NewPath, "%s/%s", Directory,  File->d_name);
+		snprintf(AbsPath, sizeof AbsPath, "%s/%s", Directory,  File->d_name);
 		
-		if (lstat(NewPath, &FileStat) != 0)
+
+		SubStrings.Copy(NewPath, FullPath ? AbsPath : File->d_name, sizeof NewPath);
+
+		if (lstat(AbsPath, &FileStat) != 0)
 		{
 			continue;
 		}
-		if (!FullPath) snprintf(NewPath, sizeof NewPath, "%s", File->d_name);
-
 		
 		if (S_ISDIR(FileStat.st_mode))
 		{ //It's a directory.
@@ -378,12 +380,18 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 			fwrite(OutStream, 1, strlen(OutStream), OutDesc); //Write the directory name.
 			
 			//Now we recurse and call the same function to process the subdir.
+			char CWD[4096];
+			getcwd(CWD, sizeof CWD);
 			
-			if (!Package_BuildFileList(NewPath, OutDesc, true))
+			if (!FullPath) chdir(Directory);
+			
+			if (!Package_BuildFileList(FullPath ? AbsPath : File->d_name, OutDesc, true))
 			{
 				closedir(CurDir);
+				chdir(CWD);
 				return false;
 			}
+			chdir(CWD);
 			continue;
 		}
 		//It's a file.

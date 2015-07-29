@@ -22,7 +22,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <sys/stat.h>
 #include "substrings/substrings.h"
 #include "packrat.h"
- 
+
 
 bool Files_Mkdir(const char *Source, const char *Destination)
 { //There will be no overwrite option for this one. The directory is probably not empty.
@@ -42,21 +42,21 @@ bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwri
 {
 	struct stat LinkStat;
 	
-	if (stat(Source, &LinkStat) != 0) return false;
+	if (lstat(Source, &LinkStat) != 0) return false;
 	
 	//Not a symlink.
 	if (!S_ISLNK(LinkStat.st_mode)) return false;
 	
-	char Target[4096];
+	char Target[4096] = { [sizeof Target - 1] = '\0' }; //Readlink doesn't null terminate
 	
 	//Get the link target.
-	if (readlink(Source, Target, sizeof Target) == -1) return false;
+	if (readlink(Source, Target, sizeof Target - 1) == -1) return false;
 	
 	//Try and delete any other symlink that has the same name as Destination but possibly different target.
 	struct stat Temp;
 
 	//What to do if our target exists.
-	if (stat(Destination, &Temp) == 0)
+	if (lstat(Destination, &Temp) == 0)
 	{
 		//if it's a directory, purge it.
 		if (Overwrite)
