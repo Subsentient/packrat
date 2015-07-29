@@ -33,6 +33,8 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath);
 static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc);
 static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList);
+static bool Package_SaveMetadata(const struct Package *Pkg, const char *Directory);
+static bool Package_CompressPackage(const char *PackageTempDir);
 
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize)
 {	
@@ -120,16 +122,21 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 {
 	//cd to the new directory
-
+	printf("---\nCreating package from directory %s\n---\nPackageID=%s\nVersionString=%s\nArch=%s\n", Directory, Job->PackageID, Job->VersionString, Job->Arch);
+	
 	char PackageFullName[512];
 	//Create a directory for the package.
 	snprintf(PackageFullName, sizeof PackageFullName, "%s_%s.%s", Job->PackageID, Job->VersionString, Job->Arch); //Build the name we'll use while we're at it.
+
+	printf("Creating temporary directory %s...\n", PackageFullName);
 
 	if (mkdir(PackageFullName, 0755) != 0)
 	{
 		puts(strerror(errno));
 		return false;
 	}
+
+	
 	char PackageDataPath[512];
 	
 	//Create the files directory.
@@ -139,8 +146,12 @@ bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 	//Create the metadata directory
 	snprintf(PackageInfoDir, sizeof PackageInfoDir, "%s/info", PackageFullName);
 	
-	if (mkdir(PackageDataPath, 0755) != 0) return false;
-	if (mkdir(PackageInfoDir, 0755) != 0) return false;
+	puts("Creating subdirectories...");
+	if (mkdir(PackageDataPath, 0755) != 0 || mkdir(PackageInfoDir, 0755) != 0)
+	{
+		puts(strerror(errno));
+		return false;
+	}
 	
 	char FileListPath[4096];
 	char ChecksumListPath[4096];
@@ -150,33 +161,120 @@ bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 	snprintf(ChecksumListPath, sizeof ChecksumListPath, "%s/checksums.txt", PackageInfoDir);
 	
 	
+	puts("Building info/filelist.txt...");
 	//Create a file list for the package.
 	FILE *Desc = fopen(FileListPath, "wb");
 	
-	if (!Desc) return false;
-	
+	if (!Desc)
+	{
+		fprintf(stderr, "Failed to open filelist.txt for writing.\n");
+		return false;
+	}
 	//Do the file list creation.
-	if (!Package_BuildFileList(Directory, Desc, false)) return false;
-	
+	if (!Package_BuildFileList(Directory, Desc, false))
+	{
+		fprintf(stderr, "Failed to create filelist.txt; data processing error.\n");
+		return false;
+	}
 	fclose(Desc);
 	
+	puts("Building info/checksums.txt...");
 	//Build sha1 of everything.
-	if (!(Desc = fopen(ChecksumListPath, "wb"))) return false;
+	if (!(Desc = fopen(ChecksumListPath, "wb")))
+	{
+		fprintf(stderr, "Failed to open checksums.txt for writing.\n");
+		return false;
+	}
 	//Do the checksum list creation.
 	if (!Package_MakeAllChecksums(Directory, FileListPath, Desc))
 	{
+		fprintf(stderr, "Failed to build checksums.txt; data processing error.\n");
 		return false;
 	}
 	fclose(Desc);
 	
+	puts("Building info/metadata.txt...");
+	//Save package metadata.
+	if (!Package_SaveMetadata(Job, PackageInfoDir))
+	{
+		fprintf(stderr, "Failed to save metadata.txt\n");
+		return false;
+	}
+	
+	puts("Copying files...");
 	//Clone files into the new directory.
 	if (!Package_MkPkgCloneFiles(PackageDataPath, Directory, FileListPath))
 	{
+		fprintf(stderr, "File copy failed.\n");
 		return false;
 	}
+	
+	puts("Creating .pkrt file...");
+	//Compress package.
+	if (!Package_CompressPackage(PackageFullName))
+	{
+		fprintf(stderr, "Failed to create .pkrt package.\n");
+		return false;
+	}
+	
+	//Delete temporary directory.
+	char CmdBuf[4096];
+	snprintf(CmdBuf, sizeof CmdBuf, "rm -rf %s", PackageFullName);
+	puts("Removing temporary directory...");
+	system(CmdBuf);
+	
+	printf("Package %s.pkrt created successfully.\n", PackageFullName);
+	
 	return true;
 	
 	
+}
+
+static bool Package_CompressPackage(const char *PackageTempDir)
+{
+	char PackageName[4096];
+	
+	snprintf(PackageName, sizeof PackageName, "../%s.pkrt", PackageTempDir);
+	
+	pid_t PID = fork();
+		
+	if (PID == -1) return false;
+	
+	if (PID == 0)
+	{ ///Child code
+		setsid();
+		unlink(PackageName); //Delete the old if it exists.
+
+		chdir(PackageTempDir);
+
+		execlp("tar", "tar", "cJfp", PackageName, ".", NULL);
+		_exit(1);
+	}
+	
+	int RawExitStatus = 0;
+	
+	//Wait for the process to quit.
+	waitpid(PID, &RawExitStatus, 0);
+	
+	return WEXITSTATUS(RawExitStatus) == 0;
+}
+
+static bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath)
+{
+	char MetadataPath[4096];
+	
+	snprintf(MetadataPath, sizeof MetadataPath, "%s/metadata.txt", InfoPath);
+	FILE *Desc = fopen(MetadataPath, "wb");
+	
+	if (!Desc) return false;
+	
+	char MetadataBuf[8192];
+	snprintf(MetadataBuf, sizeof MetadataBuf, "PackageID=%s\nVersionString=%s\nArch=%s\n", Pkg->PackageID, Pkg->VersionString, Pkg->Arch);
+	
+	fwrite(MetadataBuf, 1, strlen(MetadataBuf), Desc);
+	fclose(Desc);
+	
+	return true;
 }
 
 static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList)
