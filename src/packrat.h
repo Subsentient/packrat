@@ -20,6 +20,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 #include <stdbool.h>
 #define CONFIGFILE_PATH "/etc/packrat.conf"
+#define DB_PATH "/var/packrat/database/"
 
 //Functions
 
