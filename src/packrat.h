@@ -22,17 +22,6 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #define CONFIGFILE_PATH "/etc/packrat.conf"
 #define DB_PATH "/var/packrat/database/"
 
-//Functions
-
-//package.c
-bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize);
-bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
-bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize);
-
-//files.c
-bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite);
-bool Files_Mkdir(const char *Source, const char *Destination);
-bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite);
 
 //Structs
 struct PackageList
@@ -48,6 +37,27 @@ struct PackageList
 	struct PackageList *Next;
 
 };
+
+//Functions
+
+//package.c
+bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize);
+bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
+bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize);
+
+//files.c
+bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite);
+bool Files_Mkdir(const char *Source, const char *Destination);
+bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite);
+
+//db.c
+const char *DB_Disk_GetChecksums(const char *PackageID);
+const char *DB_Disk_GetFileList(const char *PackageID);
+bool DB_Disk_LoadDB(void);
+void DB_Add(const struct Package *Pkg);
+bool DB_Delete(const char *PackageID);
+void DB_Shutdown(void);
+bool DB_Disk_DeletePackage(const char *PackageID);
 	
 //Globals
 extern char SupportedArch[8][64];

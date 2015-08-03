@@ -26,7 +26,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "substrings/substrings.h"
 
 //Static functions
-static bool DB_LoadFromDB(const char *Path);
+static bool DB_Disk_LoadPackage(const char *Path);
 
 //Globals
 struct PackageList *DBCore;
@@ -98,8 +98,58 @@ bool DB_Delete(const char *PackageID)
 	return false;
 }
 
-static bool DB_LoadFromDB(const char *Path)
-{
+const char *DB_Disk_GetChecksums(const char *PackageID)
+{ //Returns an allocated string that contains the checksum list.
+	char Path[4096];
+	
+	snprintf(Path, sizeof Path, "%s%s/checksums.txt", DB_PATH, PackageID);
+	
+	struct stat FileStat;
+	
+	if (stat(Path, &FileStat) != 0)
+	{
+		return NULL;
+	}
+	
+	FILE *Desc = fopen(Path, "rb");
+	
+	if (!Desc) return NULL;
+	
+	char *Buffer = malloc(FileStat.st_size + 1);
+	fread(Buffer, 1, FileStat.st_size, Desc);
+	fclose(Desc);
+	Buffer[FileStat.st_size] = '\0';
+	
+	return Buffer;
+}
+
+const char *DB_Disk_GetFileList(const char *PackageID)
+{ //Returns an allocated string that contains the file list.
+	char Path[4096];
+	
+	snprintf(Path, sizeof Path, "%s%s/filelist.txt", DB_PATH, PackageID);
+	
+	struct stat FileStat;
+	
+	if (stat(Path, &FileStat) != 0)
+	{
+		return NULL;
+	}
+	
+	FILE *Desc = fopen(Path, "rb");
+	
+	if (!Desc) return NULL;
+	
+	char *Buffer = malloc(FileStat.st_size + 1);
+	fread(Buffer, 1, FileStat.st_size, Desc);
+	fclose(Desc);
+	Buffer[FileStat.st_size] = '\0';
+	
+	return Buffer;
+}
+
+static bool DB_Disk_LoadPackage(const char *Path)
+{ //Loads basic metadata info.
 	char NewPath[4096];
 	struct stat FileStat;
 	snprintf(NewPath, sizeof NewPath, "%s/metadata.txt", Path);
@@ -147,7 +197,7 @@ static bool DB_LoadFromDB(const char *Path)
 	return true;
 }
 
-bool DB_LoadDB(void)
+bool DB_Disk_LoadDB(void)
 {
 	struct dirent *File = NULL;
 	DIR *CurDir = NULL;
@@ -169,10 +219,42 @@ bool DB_LoadDB(void)
 		//Check if it's a directory like it should be.
 		if (!S_ISDIR(FileStat.st_mode)) continue;
 		
-		DB_LoadFromDB(Path);
+		//Load the package data.
+		DB_Disk_LoadPackage(Path);
 	}
 	
 	closedir(CurDir);
+	
+	return true;
+}
+
+bool DB_Disk_DeletePackage(const char *PackageID)
+{
+	struct stat FileStat;
+	char Path[4096];
+	
+	snprintf(Path, sizeof Path, "%s%s", DB_PATH, PackageID);
+	
+	if (stat(Path, &FileStat) != 0 || !S_ISDIR(FileStat.st_mode))
+	{
+		return false;
+	}
+	
+	char CWD[4096];
+	getcwd(CWD, sizeof CWD);
+	
+	if (chdir(Path) != 0) return false;
+	
+	
+	//Delete db files
+	if (unlink("filelist.txt") != 0) return false;
+	if (unlink("checksums.txt") != 0) return false;
+	if (unlink("metadata.txt") != 0) return false;
+	
+	if (chdir(CWD) != 0) return false;
+	
+	//Remove the now empty directory.
+	if (rmdir(Path) != 0) return false;
 	
 	return true;
 }
