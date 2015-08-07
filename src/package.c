@@ -277,6 +277,44 @@ static bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath
 	return true;
 }
 
+bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf)
+{
+	char Path[4096];
+	
+	char CurLine[4096];
+	const char *Iter = FileListBuf;
+	char Path1[4096], Path2[4096];
+	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
+	{
+		const char *LineData = CurLine + 2; //Plus the 'd ' or 'f '
+		
+		snprintf(Path1, sizeof Path1, "%s/%s", PackageDir, LineData):
+		snprintf(Path2, sizeof Path2, "%s/%s", Sysroot, LineData):
+		if (*CurLine == 'd')
+		{
+			Files_Mkdir(Path1, Path2); //We don't care much if this fails, it updates the mode if the directory exists.
+		}
+		else if (*CurLine == 'f')
+		{
+			if (lstat(Path1, &FileStat) != 0)
+			{
+				free(Buffer);
+				return false;
+			}
+			
+			if (S_ISLNK(FileStat.st_mode))
+			{
+				if (!Files_SymlinkCopy(Path1, Path2, true)) return false;
+			}
+			else
+			{
+				if (!Files_FileCopy(Path1, Path2, true)) return false;
+			}
+		}
+	}
+	return true;
+}
+
 static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList)
 { //Used when building a package.
 	

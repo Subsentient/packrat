@@ -148,6 +148,51 @@ const char *DB_Disk_GetFileList(const char *PackageID)
 	return Buffer;
 }
 
+bool DB_Disk_GetMetadata(const char *Path, struct Package *OutPkg)
+{ //Loads basic metadata info.
+	char NewPath[4096];
+	struct stat FileStat;
+	snprintf(NewPath, sizeof NewPath, "%s/metadata.txt", Path);
+	
+	if (stat(NewPath, &FileStat) != 0) return false;
+
+	FILE *Desc = fopen(NewPath, "rb");
+	
+	if (!Desc) return false;
+	
+
+	char Text[FileStat.st_size + 1]; /*a variable length array. Might be faster than calling malloc(),
+	* and since this function will be used a lot, seems appropriate. File size should not total even 1kb.*/
+	
+	fread(Text, 1, FileStat.st_size, Desc);
+	fclose(Desc);
+	
+	const char *Iter = Text;
+	
+	while (SubStrings.Line.GetLine(Text, sizeof Text, &Iter))
+	{
+		if (SubStrings.StartsWith("PackageID=", Text))
+		{
+			const char *Data = Text + (sizeof "PackageID=" - 1);
+			SubStrings.Copy(OutPkg->PackageID, Data, sizeof OutPkg->PackageID);
+		}
+		else if (SubStrings.StartsWith("VersionString=", Text))
+		{
+			const char *Data = Text + (sizeof "VersionString=" - 1);
+			SubStrings.Copy(OutPkg->VersionString, Data, sizeof OutPkg->VersionString);
+		}
+		else if (SubStrings.StartsWith("Arch=", Text))
+		{
+			const char *Data = Text + (sizeof "Arch=" - 1);
+			SubStrings.Copy(OutPkg->Arch, Data, sizeof OutPkg->Arch);
+		}
+		else continue; //Ignore anything that doesn't make sense.
+	}
+	
+	return true;
+}
+
+
 static bool DB_Disk_LoadPackage(const char *Path)
 { //Loads basic metadata info.
 	char NewPath[4096];
@@ -257,5 +302,41 @@ bool DB_Disk_DeletePackage(const char *PackageID)
 	if (rmdir(Path) != 0) return false;
 	
 	return true;
+}
+
+bool DB_Disk_SavePackage(const char *InInfoDir)
+{
+	char Path[4096];
+	
+	//Get metadata.
+	struct Package Pkg;
+	
+	if (!DB_Disk_GetMetadata(InInfoDir. &Pkg)) return false;
+	
+	//Build path for the package.
+	snprintf(Path, sizeof Path, DB_PATH "%s", Pkg.PackageID);
+	
+	//Change directory.
+	if (chdir(Path) != 0) return false;
+	
+	
+	///File list
+	//Build path for incoming file.
+	snprintf(Path, sizeof Path, "%s/filelist.txt", InInfoDir);
+	
+	//We overwrite an earlier version.
+	if (!Files_FileCopy(Path, "filelist.txt", true)) return false;
+	
+	///Metadata
+	snprintf(Path, sizeof Path, "%s/metadata.txt", InInfoDir);
+	
+	if (!Files_FileCopy(Path, "metadata.txt", true)) return false;
+	
+	///Checksums
+	snprintf(Path, sizeof Path, "%s/checksums.txt", InInfoDir);
+	
+	if (!Files_FileCopy(Path, "checksums.txt", true)) return false;
+	
+	//Now we write the metadata file.
 }
 

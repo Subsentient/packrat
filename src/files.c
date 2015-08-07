@@ -33,8 +33,12 @@ bool Files_Mkdir(const char *Source, const char *Destination)
 	
 	struct stat Temp;
 	//Destination already exists.
-	if (stat(Destination, &Temp) == 0) return false; //I wish I could pass NULL to stat for the second argument. Sometimes I just want to know it exists.
-	
+	if (stat(Destination, &Temp) == 0)
+	{
+		//Change permissions to reflect the new version
+		chmod(Destination, DirStat.st_mode);
+		return false; //I wish I could pass NULL to stat for the second argument. Sometimes I just want to know it exists.
+	}
 	return !mkdir(Destination, DirStat.st_mode);
 }
 
