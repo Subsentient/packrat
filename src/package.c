@@ -33,7 +33,6 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath);
 static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc);
 static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList);
-static bool Package_SaveMetadata(const struct Package *Pkg, const char *Directory);
 static bool Package_CompressPackage(const char *PackageTempDir);
 
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize)
@@ -259,7 +258,7 @@ static bool Package_CompressPackage(const char *PackageTempDir)
 	return WEXITSTATUS(RawExitStatus) == 0;
 }
 
-static bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath)
+bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath)
 {
 	char MetadataPath[4096];
 	
@@ -279,17 +278,17 @@ static bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath
 
 bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf)
 {
-	char Path[4096];
-	
 	char CurLine[4096];
 	const char *Iter = FileListBuf;
 	char Path1[4096], Path2[4096];
+	struct stat FileStat;
+	
 	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
 	{
 		const char *LineData = CurLine + 2; //Plus the 'd ' or 'f '
 		
-		snprintf(Path1, sizeof Path1, "%s/%s", PackageDir, LineData):
-		snprintf(Path2, sizeof Path2, "%s/%s", Sysroot, LineData):
+		snprintf(Path1, sizeof Path1, "%s/%s", PackageDir, LineData);
+		snprintf(Path2, sizeof Path2, "%s/%s", Sysroot, LineData);
 		if (*CurLine == 'd')
 		{
 			Files_Mkdir(Path1, Path2); //We don't care much if this fails, it updates the mode if the directory exists.
@@ -298,7 +297,6 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 		{
 			if (lstat(Path1, &FileStat) != 0)
 			{
-				free(Buffer);
 				return false;
 			}
 			

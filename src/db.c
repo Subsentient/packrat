@@ -98,11 +98,11 @@ bool DB_Delete(const char *PackageID)
 	return false;
 }
 
-const char *DB_Disk_GetChecksums(const char *PackageID)
+const char *DB_Disk_GetChecksums(const char *PackageID, const char *Sysroot)
 { //Returns an allocated string that contains the checksum list.
 	char Path[4096];
 	
-	snprintf(Path, sizeof Path, "%s%s/checksums.txt", DB_PATH, PackageID);
+	snprintf(Path, sizeof Path, "%s/%s%s/checksums.txt", Sysroot, DB_PATH, PackageID);
 	
 	struct stat FileStat;
 	
@@ -123,11 +123,36 @@ const char *DB_Disk_GetChecksums(const char *PackageID)
 	return Buffer;
 }
 
-const char *DB_Disk_GetFileList(const char *PackageID)
+const char *DB_Disk_GetFileList(const char *PackageID, const char *Sysroot)
 { //Returns an allocated string that contains the file list.
 	char Path[4096];
 	
-	snprintf(Path, sizeof Path, "%s%s/filelist.txt", DB_PATH, PackageID);
+	snprintf(Path, sizeof Path, "%s/%s%s/filelist.txt", Sysroot, DB_PATH, PackageID);
+	
+	struct stat FileStat;
+	
+	if (stat(Path, &FileStat) != 0)
+	{
+		return NULL;
+	}
+	
+	FILE *Desc = fopen(Path, "rb");
+	
+	if (!Desc) return NULL;
+	
+	char *Buffer = malloc(FileStat.st_size + 1);
+	fread(Buffer, 1, FileStat.st_size, Desc);
+	fclose(Desc);
+	Buffer[FileStat.st_size] = '\0';
+	
+	return Buffer;
+}
+
+const char *DB_Disk_GetFileListDyn(const char *InfoDir)
+{ //Returns an allocated string that contains the file list.
+	char Path[4096];
+	
+	snprintf(Path, sizeof Path, "%s/filelist.txt", InfoDir);
 	
 	struct stat FileStat;
 	
@@ -242,21 +267,27 @@ static bool DB_Disk_LoadPackage(const char *Path)
 	return true;
 }
 
-bool DB_Disk_LoadDB(void)
+bool DB_Disk_LoadDB(const char *Sysroot)
 {
 	struct dirent *File = NULL;
 	DIR *CurDir = NULL;
 	struct stat FileStat;
 	
-	if (!(CurDir = opendir(DB_PATH)))
+	char Path[4096];
+	snprintf(Path, sizeof Path, "%s/%s", Sysroot, DB_PATH);
+	
+	const unsigned PathLen = strlen(Path);
+	
+	if (!(CurDir = opendir(Path)))
 	{
 		return false;
 	}
 	
-	char Path[4096] = DB_PATH;
+
+	
 	while ((File = readdir(CurDir)))
 	{
-		Path[sizeof DB_PATH - 1] = '\0';
+		Path[PathLen] = '\0';
 		SubStrings.Cat(Path, File->d_name, sizeof Path);
 		
 		if (stat(Path, &FileStat) != 0) return false;
@@ -273,12 +304,12 @@ bool DB_Disk_LoadDB(void)
 	return true;
 }
 
-bool DB_Disk_DeletePackage(const char *PackageID)
+bool DB_Disk_DeletePackage(const char *PackageID, const char *Sysroot)
 {
 	struct stat FileStat;
 	char Path[4096];
 	
-	snprintf(Path, sizeof Path, "%s%s", DB_PATH, PackageID);
+	snprintf(Path, sizeof Path, "%s/%s%s", Sysroot, DB_PATH, PackageID);
 	
 	if (stat(Path, &FileStat) != 0 || !S_ISDIR(FileStat.st_mode))
 	{
@@ -304,17 +335,25 @@ bool DB_Disk_DeletePackage(const char *PackageID)
 	return true;
 }
 
-bool DB_Disk_SavePackage(const char *InInfoDir)
+bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot)
 {
 	char Path[4096];
 	
 	//Get metadata.
 	struct Package Pkg;
 	
-	if (!DB_Disk_GetMetadata(InInfoDir. &Pkg)) return false;
+	if (!DB_Disk_GetMetadata(InInfoDir, &Pkg)) return false;
 	
 	//Build path for the package.
-	snprintf(Path, sizeof Path, DB_PATH "%s", Pkg.PackageID);
+	snprintf(Path, sizeof Path, "%s/" DB_PATH "%s", Sysroot, Pkg.PackageID);
+	
+	struct stat DirStat;
+	
+	//Create directory if it doesn't already exist.
+	if (stat(Path, &DirStat) != 0 && mkdir(Path, 0755) != 0)
+	{
+		return false;
+	}
 	
 	//Change directory.
 	if (chdir(Path) != 0) return false;
@@ -337,6 +376,6 @@ bool DB_Disk_SavePackage(const char *InInfoDir)
 	
 	if (!Files_FileCopy(Path, "checksums.txt", true)) return false;
 	
-	//Now we write the metadata file.
+	return true;
 }
 

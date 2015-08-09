@@ -26,7 +26,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 {
 	
-	char Path[4096];
+	char Path[4096]; //Will contain a value from Package_ExtractPackage()
 	
 	//Extract the pkrt file into a temporary directory, which is given back to us in Path.
 	if (!Package_ExtractPackage(PkgPath, Path, sizeof Path))
@@ -35,7 +35,7 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	}
 	
 	//Change to Path/info
-	if (chdir(Path) != 0 || chdir("info") != 0)
+	if (chdir(Path) != 0 || chdir("info") != 0) return false;
 	
 	struct stat FileStat;
 	
@@ -45,6 +45,7 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
+	//We need a file list.
 	FILE *Desc = fopen("filelist.txt", "rb");
 	
 	char *Buf = malloc(FileStat.st_size + 1);
@@ -61,20 +62,9 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	free(Buf);
 	
 	///Update the database.
+	if (!DB_Disk_SavePackage(Path, Sysroot)) return false;
 	
-	//First we need to get the metadata.
-	if (stat("metadata.txt", &FileStat) != 0)
-	{
-		return false;
-	}
 	
-	if (!(Desc = fopen("metadata.txt", "rb")))
-	{
-		return false;
-	}
-	Buf = malloc(FileStat.st_size + 1);
-	fread(Buf, 1, FileStat.st_size, Desc);
-	fclose(Desc);
 	
 	
 	return true;

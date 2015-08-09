@@ -45,6 +45,7 @@ bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, uns
 bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
 bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize);
 bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf);
+bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath);
 
 //files.c
 bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite);
@@ -52,14 +53,16 @@ bool Files_Mkdir(const char *Source, const char *Destination);
 bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite);
 
 //db.c
-const char *DB_Disk_GetChecksums(const char *PackageID);
-const char *DB_Disk_GetFileList(const char *PackageID);
-bool DB_Disk_LoadDB(void);
+const char *DB_Disk_GetChecksums(const char *PackageID, const char *Sysroot);
+const char *DB_Disk_GetFileList(const char *PackageID, const char *Sysroot);
+const char *DB_Disk_GetFileListDyn(const char *InfoDir);
+bool DB_Disk_LoadDB(const char *Sysroot);
 void DB_Add(const struct Package *Pkg);
 bool DB_Delete(const char *PackageID);
 void DB_Shutdown(void);
-bool DB_Disk_DeletePackage(const char *PackageID);
-	
+bool DB_Disk_DeletePackage(const char *PackageID, const char *Sysroot);
+bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot);
+
 //Globals
 extern char SupportedArch[8][64];
 #endif //_PACKRAT_H_
