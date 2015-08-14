@@ -31,6 +31,20 @@ static bool DB_Disk_LoadPackage(const char *Path);
 //Globals
 struct PackageList *DBCore;
 
+struct PackageList *DB_Lookup(const char *PackageID)
+{
+	struct PackageList *Worker = DBCore;
+	
+	if (!Worker) return NULL;
+	
+	for (; Worker; Worker = Worker->Next)
+	{
+		if (!strcmp(Worker->PackageID, PackageID)) return Worker;
+	}
+	
+	return NULL;
+}
+
 //Function definitions
 void DB_Add(const struct Package *Pkg)
 {

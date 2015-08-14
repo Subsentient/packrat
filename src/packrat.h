@@ -46,6 +46,7 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize);
 bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf);
 bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath);
+bool Package_UninstallFiles(const char *PackageID, const char *Sysroot, const char *FileListBuf);
 
 //files.c
 bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite);
@@ -62,6 +63,7 @@ bool DB_Delete(const char *PackageID);
 void DB_Shutdown(void);
 bool DB_Disk_DeletePackage(const char *PackageID, const char *Sysroot);
 bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot);
+struct PackageList *DB_Lookup(const char *PackageID);
 
 //Globals
 extern char SupportedArch[8][64];

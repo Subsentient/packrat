@@ -313,6 +313,36 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 	return true;
 }
 
+bool Package_UninstallFiles(const char *PackageID, const char *Sysroot, const char *FileListBuf)
+{
+	char CurLine[4096];
+	struct stat FileStat;
+	char Path[4096];
+	const char *Iter = FileListBuf;
+	
+	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
+	{
+		const char *LineData = CurLine + 2;
+		
+		switch (*CurLine)
+		{
+			case 'd':
+				continue;
+			case 'f':
+			{
+				//build a path for the file we're removing.
+				snprintf(Path, sizeof Path, "%s/%s", Sysroot, LineData);
+				
+				if (lstat(Path, &FileStat) != 0) continue;
+				
+				//Delete it.
+				unlink(Path);
+			}
+		}
+	}
+	return true;
+}
+
 static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList)
 { //Used when building a package.
 	

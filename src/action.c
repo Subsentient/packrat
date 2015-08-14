@@ -46,26 +46,42 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	}
 	
 	//We need a file list.
-	FILE *Desc = fopen("filelist.txt", "rb");
-	
-	char *Buf = malloc(FileStat.st_size + 1);
-	fread(Buf, 1, FileStat.st_size, Desc);
-	fclose(Desc);
-	Buf[FileStat.st_size] = '\0';
+	const char *Filelist = DB_Disk_GetFileListDyn(".");
 	
 	//Install the files.
-	if (!Package_InstallFiles(Path, Sysroot, Buf))
+	if (!Package_InstallFiles(Path, Sysroot, Filelist))
 	{
-		free(Buf);
+
 		return false;
 	}
-	free(Buf);
 	
 	///Update the database.
 	if (!DB_Disk_SavePackage(Path, Sysroot)) return false;
 	
 	
+	return true;
+}
+
+bool Action_UninstallPackage(const char *PackageID, const char *Sysroot)
+{
+	//Load the database.
+	if (!DB_Disk_LoadDB(Sysroot)) return false;
 	
+	//Search for the package.
+	struct PackageList *Pkg = DB_Lookup(PackageID);
+	
+	if (!Pkg) return false;
+	
+	//Got it. Now load the file list.
+	const char *FileListBuf = NULL;
+	if (!(FileListBuf = DB_Disk_GetFileList(PackageID, Sysroot))) return false;
+	
+	//Now delete the files.
+	if (!Package_UninstallFiles(PackageID, Sysroot, FileListBuf)) return false;
+	
+	//Now remove it from our database.
+	DB_Disk_DeletePackage(PackageID, Sysroot);
+	DB_Delete(PackageID);
 	
 	return true;
 }
