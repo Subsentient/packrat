@@ -20,17 +20,29 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 #include <stdbool.h>
 #define CONFIGFILE_PATH "/etc/packrat.conf"
-#define DB_PATH "/var/packrat/database/"
-
+#define DB_PATH "/var/packrat/pkgdb/"
+#define DBCORE_SIZE ((('z'-'a')+1) + (('9'-'0')+1))
 
 //Structs
 struct PackageList
 {
 	struct Package
 	{
-		char Arch[64];
-		char PackageID[256];
-		char VersionString[256];
+		unsigned PackageGeneration; //The build number of this package, so we can fix busted packages of the same version of software.
+
+		char Arch[64]; //Package architecture
+		char PackageID[256]; //name of the package.
+		char VersionString[128]; //complete version of the software we're dealing with
+		
+		struct
+		{ //Commands executed at various stages of the install process.
+			char PreInstall[256];
+			char PostInstall[256];
+			char PreUninstall[256];
+			char PostUninstall[256];
+			char PreUpdate[256];
+			char PostUpdate[256];
+		} Cmds;
 	} Pkg;
 	
 	struct PackageList *Prev;
@@ -40,6 +52,9 @@ struct PackageList
 
 //Functions
 
+//config.c
+bool Config_ArchPresent(const char *CheckArch);
+bool Config_LoadConfig(void);
 //package.c
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize);
 bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
@@ -57,14 +72,17 @@ bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwri
 const char *DB_Disk_GetChecksums(const char *PackageID, const char *Sysroot);
 const char *DB_Disk_GetFileList(const char *PackageID, const char *Sysroot);
 const char *DB_Disk_GetFileListDyn(const char *InfoDir);
+bool DB_Disk_GetMetadata(const char *Path, struct Package *OutPkg);
 bool DB_Disk_LoadDB(const char *Sysroot);
-void DB_Add(const struct Package *Pkg);
-bool DB_Delete(const char *PackageID);
+struct PackageList *DB_Add(const struct Package *Pkg);
+bool DB_Delete(const char *PackageID, const char *Arch);
 void DB_Shutdown(void);
-bool DB_Disk_DeletePackage(const char *PackageID, const char *Sysroot);
+bool DB_Disk_DeletePackage(const char *PackageID, const char *Arch, const char *Sysroot);
 bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot);
-struct PackageList *DB_Lookup(const char *PackageID);
+struct PackageList *DB_Lookup(const char *PackageID, const char *Arch);
 
 //Globals
 extern char SupportedArch[8][64];
+extern struct PackageList *DBCore[DBCORE_SIZE];
+
 #endif //_PACKRAT_H_

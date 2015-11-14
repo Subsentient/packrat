@@ -22,39 +22,60 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <sys/stat.h>
 #include <errno.h>
 #include <dirent.h>
+#include <ctype.h>
 #include "packrat.h"
 #include "substrings/substrings.h"
 
 //Static functions
 static bool DB_Disk_LoadPackage(const char *Path);
+static struct PackageList **DB_GetListByAlpha(const char StartingCharacter);
 
 //Globals
-struct PackageList *DBCore;
+struct PackageList *DBCore[DBCORE_SIZE];
 
-struct PackageList *DB_Lookup(const char *PackageID)
+static struct PackageList **DB_GetListByAlpha(const char StartingCharacter)
 {
-	struct PackageList *Worker = DBCore;
+	if (!isalnum(StartingCharacter)) return NULL;
 	
-	if (!Worker) return NULL;
+	const char Char = tolower(StartingCharacter);
+	
+	if (isalpha(Char)) return DBCore + ((Char-'a'));
+	else return DBCore + ((('z'-'a')+1) + ((Char-'0')));
+}
+	
+	
+	
+	
+struct PackageList *DB_Lookup(const char *PackageID, const char *Arch)
+{
+	struct PackageList **List = DB_GetListByAlpha(*PackageID);
+	
+	if (!*List) return NULL;
+	
+	struct PackageList *Worker = *List;
 	
 	for (; Worker; Worker = Worker->Next)
 	{
-		if (!strcmp(Worker->PackageID, PackageID)) return Worker;
+		if (!strcmp(Worker->Pkg.PackageID, PackageID) && Arch ? !strcmp(Arch, Worker->Pkg.Arch) : true) return Worker;
 	}
 	
 	return NULL;
 }
 
 //Function definitions
-void DB_Add(const struct Package *Pkg)
+struct PackageList *DB_Add(const struct Package *Pkg)
 {
-	struct PackageList *Worker = DBCore;
-	if (!DBCore)
+	struct PackageList **List = DB_GetListByAlpha(*Pkg->PackageID);
+	struct PackageList *Worker = NULL;
+	
+	if (!*List)
 	{
-		DBCore = Worker = calloc(sizeof(struct PackageList), 1);
+		*List = Worker = calloc(sizeof(struct PackageList), 1);
 	}
 	else
 	{
+		Worker = *List;
+		
 		while (Worker->Next) Worker = Worker->Next;
 		
 		Worker->Next = calloc(sizeof(struct PackageList), 1);
@@ -63,39 +84,49 @@ void DB_Add(const struct Package *Pkg)
 	}
 	
 	Worker->Pkg = *Pkg;
+	
+	return Worker;
 }
 
 void DB_Shutdown(void)
-{
-	struct PackageList *Worker = DBCore, *Del;
-	
-	for (; Worker; Worker = Del)
+{	
+	int Inc = 0;
+	for (; Inc < DBCORE_SIZE; ++Inc)
 	{
-		Del = Worker->Next;
-		free(Worker);
+		struct PackageList *Del, *Worker = DBCore[Inc];
+			
+			
+		for (; Worker; Worker = Del)
+		{
+			Del = Worker->Next;
+			free(Worker);
+		}
+		
+		DBCore[Inc] = NULL;
 	}
 }
 
-bool DB_Delete(const char *PackageID)
+bool DB_Delete(const char *PackageID, const char *Arch)
 {
-	struct PackageList *Worker = DBCore;
+	struct PackageList **List = DB_GetListByAlpha(*PackageID);
+	struct PackageList *Worker = *List;
 	
 	for (; Worker; Worker = Worker->Next)
 	{
-		if (!strcmp(PackageID, Worker->Pkg.PackageID))
+		if (!strcmp(PackageID, Worker->Pkg.PackageID) && Arch ? !strcmp(Arch, Worker->Pkg.Arch) : true)
 		{
-			if (Worker == DBCore)
+			if (Worker == *List)
 			{
 				if (Worker->Next)
 				{
-					DBCore = Worker->Next;
-					DBCore->Prev = NULL;
+					*List = Worker->Next;
+					(*List)->Prev = NULL;
 					free(Worker);
 				}
 				else
 				{
-					free(DBCore);
-					DBCore = NULL;
+					free(*List);
+					*List = NULL;
 				}
 			}
 			else
@@ -189,6 +220,9 @@ const char *DB_Disk_GetFileListDyn(const char *InfoDir)
 
 bool DB_Disk_GetMetadata(const char *Path, struct Package *OutPkg)
 { //Loads basic metadata info.
+	
+	if (!Path) Path = ".";
+	
 	char NewPath[4096];
 	struct stat FileStat;
 	snprintf(NewPath, sizeof NewPath, "%s/metadata.txt", Path);
@@ -224,6 +258,41 @@ bool DB_Disk_GetMetadata(const char *Path, struct Package *OutPkg)
 		{
 			const char *Data = Text + (sizeof "Arch=" - 1);
 			SubStrings.Copy(OutPkg->Arch, Data, sizeof OutPkg->Arch);
+		}
+		else if (SubStrings.StartsWith("PackageGeneration=", Text))
+		{
+			const char *Data = Text + (sizeof "Arch=" - 1);
+			OutPkg->PackageGeneration = atoi(Data);
+		}
+		else if (SubStrings.StartsWith("PreInstall=", Text))
+		{
+			const char *Data = Text + (sizeof "PreInstall=" - 1);
+			SubStrings.Copy(OutPkg->Cmds.PreInstall, Data, sizeof OutPkg->Cmds.PreInstall);
+		}
+		else if (SubStrings.StartsWith("PostInstall=", Text))
+		{
+			const char *Data = Text + (sizeof "PostInstall=" - 1);
+			SubStrings.Copy(OutPkg->Cmds.PostInstall, Data, sizeof OutPkg->Cmds.PostInstall);
+		}
+		else if (SubStrings.StartsWith("PreUninstall=", Text))
+		{
+			const char *Data = Text + (sizeof "PreUninstall=" - 1);
+			SubStrings.Copy(OutPkg->Cmds.PreUninstall, Data, sizeof OutPkg->Cmds.PreUninstall);
+		}
+		else if (SubStrings.StartsWith("PostUninstall=", Text))
+		{
+			const char *Data = Text + (sizeof "PostUninstall=" - 1);
+			SubStrings.Copy(OutPkg->Cmds.PostUninstall, Data, sizeof OutPkg->Cmds.PostUninstall);
+		}
+		else if (SubStrings.StartsWith("PreUpdate=", Text))
+		{
+			const char *Data = Text + (sizeof "PreUpdate=" - 1);
+			SubStrings.Copy(OutPkg->Cmds.PreUpdate, Data, sizeof OutPkg->Cmds.PreUpdate);
+		}
+		else if (SubStrings.StartsWith("PostUpdate=", Text))
+		{
+			const char *Data = Text + (sizeof "PostUpdate=" - 1);
+			SubStrings.Copy(OutPkg->Cmds.PostUpdate, Data, sizeof OutPkg->Cmds.PostUpdate);
 		}
 		else continue; //Ignore anything that doesn't make sense.
 	}
@@ -270,6 +339,41 @@ static bool DB_Disk_LoadPackage(const char *Path)
 		{
 			const char *Data = Text + (sizeof "Arch=" - 1);
 			SubStrings.Copy(Pkg.Arch, Data, sizeof Pkg.Arch);
+		}
+		else if (SubStrings.StartsWith("PreInstall=", Text))
+		{
+			const char *Data = Text + (sizeof "PreInstall=" - 1);
+			SubStrings.Copy(Pkg.Cmds.PreInstall, Data, sizeof Pkg.Cmds.PreInstall);
+		}
+		else if (SubStrings.StartsWith("PostInstall=", Text))
+		{
+			const char *Data = Text + (sizeof "PostInstall=" - 1);
+			SubStrings.Copy(Pkg.Cmds.PostInstall, Data, sizeof Pkg.Cmds.PostInstall);
+		}
+		else if (SubStrings.StartsWith("PreUninstall=", Text))
+		{
+			const char *Data = Text + (sizeof "PreUninstall=" - 1);
+			SubStrings.Copy(Pkg.Cmds.PreUninstall, Data, sizeof Pkg.Cmds.PreUninstall);
+		}
+		else if (SubStrings.StartsWith("PostUninstall=", Text))
+		{
+			const char *Data = Text + (sizeof "PostUninstall=" - 1);
+			SubStrings.Copy(Pkg.Cmds.PostUninstall, Data, sizeof Pkg.Cmds.PostUninstall);
+		}
+		else if (SubStrings.StartsWith("PreUpdate=", Text))
+		{
+			const char *Data = Text + (sizeof "PreUpdate=" - 1);
+			SubStrings.Copy(Pkg.Cmds.PreUpdate, Data, sizeof Pkg.Cmds.PreUpdate);
+		}
+		else if (SubStrings.StartsWith("PostUpdate=", Text))
+		{
+			const char *Data = Text + (sizeof "PostUpdate=" - 1);
+			SubStrings.Copy(Pkg.Cmds.PostUpdate, Data, sizeof Pkg.Cmds.PostUpdate);
+		}
+		else if (SubStrings.StartsWith("PackageGeneration=", Text))
+		{
+			const char *Data = Text + (sizeof "PackageGeneration=" - 1);
+			Pkg.PackageGeneration = atoi(Data);
 		}
 		else continue; //Ignore anything that doesn't make sense.
 	}
@@ -318,12 +422,12 @@ bool DB_Disk_LoadDB(const char *Sysroot)
 	return true;
 }
 
-bool DB_Disk_DeletePackage(const char *PackageID, const char *Sysroot)
+bool DB_Disk_DeletePackage(const char *PackageID, const char *Arch, const char *Sysroot)
 {
 	struct stat FileStat;
 	char Path[4096];
 	
-	snprintf(Path, sizeof Path, "%s/%s%s", Sysroot, DB_PATH, PackageID);
+	snprintf(Path, sizeof Path, "%s/%s%s.%s", Sysroot, DB_PATH, PackageID, Arch);
 	
 	if (stat(Path, &FileStat) != 0 || !S_ISDIR(FileStat.st_mode))
 	{
@@ -359,7 +463,7 @@ bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot)
 	if (!DB_Disk_GetMetadata(InInfoDir, &Pkg)) return false;
 	
 	//Build path for the package.
-	snprintf(Path, sizeof Path, "%s/" DB_PATH "%s", Sysroot, Pkg.PackageID);
+	snprintf(Path, sizeof Path, "%s/" DB_PATH "%s.%s", Sysroot, Pkg.PackageID, Pkg.Arch);
 	
 	struct stat DirStat;
 	

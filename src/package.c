@@ -28,7 +28,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "packrat.h"
 #include "substrings/substrings.h"
 
-#define SHA1_PER_READ_SIZE 1024 * 1024 //1MB
+#define SHA1_PER_READ_SIZE ((1024 * 1024) * 5) //5MB
 
 static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath);
 static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc);
@@ -121,11 +121,11 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 {
 	//cd to the new directory
-	printf("---\nCreating package from directory %s\n---\nPackageID=%s\nVersionString=%s\nArch=%s\n", Directory, Job->PackageID, Job->VersionString, Job->Arch);
+	printf("---\nCreating package from directory %s\n---\nPackageID=%s\nVersionString=%s\nArch=%s\nPackageGeneration=%u\n", Directory, Job->PackageID, Job->VersionString, Job->Arch, Job->PackageGeneration);
 	
 	char PackageFullName[512];
 	//Create a directory for the package.
-	snprintf(PackageFullName, sizeof PackageFullName, "%s_%s.%s", Job->PackageID, Job->VersionString, Job->Arch); //Build the name we'll use while we're at it.
+	snprintf(PackageFullName, sizeof PackageFullName, "%s_%s-%u.%s", Job->PackageID, Job->VersionString, Job->PackageGeneration, Job->Arch); //Build the name we'll use while we're at it.
 
 	printf("Creating temporary directory %s...\n", PackageFullName);
 
@@ -268,9 +268,47 @@ bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath)
 	if (!Desc) return false;
 	
 	char MetadataBuf[8192];
-	snprintf(MetadataBuf, sizeof MetadataBuf, "PackageID=%s\nVersionString=%s\nArch=%s\n", Pkg->PackageID, Pkg->VersionString, Pkg->Arch);
+	snprintf(MetadataBuf, sizeof MetadataBuf, "PackageID=%s\nVersionString=%s\nArch=%s\nPackageGeneration=%u\n",
+			Pkg->PackageID, Pkg->VersionString, Pkg->Arch, Pkg->PackageGeneration);
 	
 	fwrite(MetadataBuf, 1, strlen(MetadataBuf), Desc);
+	
+	///Pre/post (un)install commands
+	
+	char TmpBuf[2048];
+	
+	*MetadataBuf = '\0'; //Wipe it so we can reuse it
+	
+	if (*Pkg->Cmds.PreInstall)
+	{
+		snprintf(TmpBuf, sizeof TmpBuf, "PreInstall=%s\n", Pkg->Cmds.PreInstall);
+		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
+	}
+	
+	if (*Pkg->Cmds.PostInstall)
+	{
+		snprintf(TmpBuf, sizeof TmpBuf, "PostInstall=%s\n", Pkg->Cmds.PostInstall);
+		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
+	}
+	
+	if (*Pkg->Cmds.PreUninstall)
+	{
+		snprintf(TmpBuf, sizeof TmpBuf, "PreUninstall=%s\n", Pkg->Cmds.PreUninstall);
+		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
+	}
+	
+	if (*Pkg->Cmds.PostUninstall)
+	{
+		snprintf(TmpBuf, sizeof TmpBuf, "PostUninstall=%s\n", Pkg->Cmds.PostUninstall);
+		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
+	}
+		
+	
+	//Write the post-install commands.
+	if (*MetadataBuf)
+	{
+		fwrite(MetadataBuf, 1, strlen(MetadataBuf), Desc);
+	}
 	fclose(Desc);
 	
 	return true;
@@ -569,22 +607,3 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 	
 	return true;
 }
-
-
-int main(int argc, char **argv)
-{
-	if (argc < 2)
-	{
-		return false;
-	}
-	
-	struct Package Pkg;
-	
-	SubStrings.Copy(Pkg.Arch, "i586", sizeof Pkg.Arch);
-	SubStrings.Copy(Pkg.PackageID, "farts", sizeof Pkg.PackageID);
-	SubStrings.Copy(Pkg.VersionString, "0.0.0.11", sizeof Pkg.VersionString);
-	
-	return !Package_CreatePackage(&Pkg, argv[1]);
-}
-
-

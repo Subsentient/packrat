@@ -23,10 +23,49 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "packrat.h"
 
 
+bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot)
+{
+	char Path[4096];
+	
+	if (!Config_LoadConfig())
+	{
+		fputs("Failed to load packrat configuration.\n", stderr);
+		return false;
+	}
+	
+	if (!Package_ExtractPackage(PkgPath, Path, sizeof Path))
+	{
+		return false;
+	}
+	
+	if (chdir(Path) != 0 || chdir("info") != 0) return false;
+	
+	struct Package Pkg;
+	
+	if (!DB_Disk_GetMetadata(NULL, &Pkg)) return false;
+	
+	struct PackageList *OldPackage = DB_Lookup(Pkg.PackageID, Pkg.Arch);
+	
+	if (!OldPackage)
+	{
+		fprintf(stderr, "Package %s.%s is not installed, so can't update it.\n", Pkg.PackageID, Pkg.Arch);
+		return false;
+	}
+
+	return true;
+}
+
 bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 {
 	
 	char Path[4096]; //Will contain a value from Package_ExtractPackage()
+	
+	//Load configuration.
+	if (!Config_LoadConfig())
+	{
+		fprintf(stderr, "Failed to load packrat configuration.\n");
+		return false;
+	}
 	
 	//Extract the pkrt file into a temporary directory, which is given back to us in Path.
 	if (!Package_ExtractPackage(PkgPath, Path, sizeof Path))
@@ -37,12 +76,22 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	//Change to Path/info
 	if (chdir(Path) != 0 || chdir("info") != 0) return false;
 	
-	struct stat FileStat;
 	
-	//Needed for file size.
-	if (stat("filelist.txt", &FileStat) != 0)
+	struct Package Pkg;
+	//Check metadata to see if the architecture is supported.
+	if (!DB_Disk_GetMetadata(NULL, &Pkg)) return false;
+	
+	if (!Config_ArchPresent(Pkg.Arch))
 	{
+		fprintf(stderr, "Package's architecture %s not supported on this system.\n", Pkg.Arch);
 		return false;
+	}
+	
+	//Process the pre-install command.
+	if (*Pkg.Cmds.PreInstall)
+	{
+		fputs("Executing pre-install commands...\n", stdout);
+		system(Pkg.Cmds.PreInstall);
 	}
 	
 	//We need a file list.
@@ -54,34 +103,73 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 
 		return false;
 	}
+	free((void*)Filelist);
+	
+	//Process the post-install command.
+	if (*Pkg.Cmds.PostInstall)
+	{
+		fputs("Executing post-install commands...\n", stdout);
+		system(Pkg.Cmds.PostInstall);
+	}
 	
 	///Update the database.
+	fputs("Updating the package database...\n", stdout);
 	if (!DB_Disk_SavePackage(Path, Sysroot)) return false;
-	
+	DB_Add(&Pkg);
 	
 	return true;
 }
 
-bool Action_UninstallPackage(const char *PackageID, const char *Sysroot)
+bool Action_UninstallPackage(const char *PackageID, const char *Arch, const char *Sysroot)
 {
+	//Load config
+	if (!Config_LoadConfig())
+	{
+		fprintf(stderr, "Failed to load packrat configuration.\n");
+		return false;
+	}
+	
 	//Load the database.
-	if (!DB_Disk_LoadDB(Sysroot)) return false;
+	if (!DB_Disk_LoadDB(Sysroot))
+	{
+		fprintf(stderr, "Failed to load packrat database. It could be missing or corrupted.");
+		return false;
+	}
 	
 	//Search for the package.
-	struct PackageList *Pkg = DB_Lookup(PackageID);
+	struct PackageList *PkgLookup = DB_Lookup(PackageID, Arch);
 	
-	if (!Pkg) return false;
+	if (!PkgLookup) return false;
 	
 	//Got it. Now load the file list.
 	const char *FileListBuf = NULL;
 	if (!(FileListBuf = DB_Disk_GetFileList(PackageID, Sysroot))) return false;
 	
+	//Run pre-uninstall commands.
+	if (*PkgLookup->Pkg.Cmds.PreUninstall)
+	{
+		fputs("Executing pre-uninstall commands...\n", stdout);
+		system(PkgLookup->Pkg.Cmds.PreUninstall);
+	}
+	
 	//Now delete the files.
 	if (!Package_UninstallFiles(PackageID, Sysroot, FileListBuf)) return false;
 	
+	free((void*)FileListBuf);
+	
+	//Run post-uninstall commands.
+	if (*PkgLookup->Pkg.Cmds.PostUninstall)
+	{
+		fputs("Executing post-uninstall commands...\n", stdout);
+		system(PkgLookup->Pkg.Cmds.PostUninstall);
+	}
+	
 	//Now remove it from our database.
-	DB_Disk_DeletePackage(PackageID, Sysroot);
-	DB_Delete(PackageID);
+	fputs("Updating the package database...\n", stdout);
+	DB_Disk_DeletePackage(PackageID, PkgLookup->Pkg.Arch, Sysroot);
+	DB_Delete(PackageID, PkgLookup->Pkg.Arch);
+	
+	
 	
 	return true;
 }

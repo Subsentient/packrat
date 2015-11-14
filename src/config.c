@@ -30,7 +30,6 @@ char SupportedArch[8][64];
 //Static function prototypes
 static bool Config_ProcessConfig(const char *ConfigStream);
 static bool Config_AddArch(const char *NewArch);
-static bool Config_ArchPresent(const char *CheckArch);
 
 //Actual functions
 bool Config_LoadConfig(void)
@@ -105,7 +104,7 @@ static bool Config_AddArch(const char *NewArch)
 	return true;
 }
 
-static bool Config_ArchPresent(const char *CheckArch)
+bool Config_ArchPresent(const char *CheckArch)
 {
 	int Inc = 0;
 	const unsigned Max = (sizeof SupportedArch / sizeof *SupportedArch) - 1;
