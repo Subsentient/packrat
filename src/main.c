@@ -16,15 +16,109 @@ You should have received a copy of the GNU General Public License
 along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "substrings/substrings.h"
 #include "packrat.h"
 
+enum OperationMode
+{
+	OP_NONE,
+	OP_CREATE,
+	OP_INSTALL,
+	OP_REMOVE,
+	OP_UPDATE,
+	OP_DISPLAY
+};
 
 int main(int argc, char **argv)
 {
-	struct Package Pkg = { .PackageID = "0aburbler", .Arch = "i586", .VersionString = "129.21" };
+	enum OperationMode Mode = OP_NONE;
 	
-	struct PackageList *List = DB_Add(&Pkg);
-	(void)List;
+	struct Package Pkg = { .PackageGeneration = 0 }; //Zero-initialized
+	
+	///Master "mode" of operation
+	if (!strcmp(argv[1], "createpkg"))
+	{
+		Mode = OP_CREATE;
+	}
+	else if (!strcmp(argv[1], "install"))
+	{
+		Mode = OP_INSTALL;
+	}
+	else if (!strcmp(argv[1], "remove"))
+	{
+		Mode = OP_REMOVE;
+	}
+	else if (!strcmp(argv[1], "update"))
+	{
+		Mode = OP_UPDATE;
+	}
+	else if (!strcmp(argv[1], "display"))
+	{
+		Mode = OP_DISPLAY;
+	}
+	else
+	{
+		fprintf(stderr, "Bad primary command \"%s\".\n", argv[1]);
+		exit(1);
+	}
+	
+	unsigned Inc = 2;
+	
+	for (; Inc < argc; ++Inc)
+	{
+		if (SubStrings.StartsWith("--pkgid=", argv[Inc]))
+		{
+			SubStrings.Extract(Pkg.PackageID, sizeof Pkg.PackageID, "=", NULL,  argv[Inc]);
+		}
+		else if (SubStrings.StartsWith("--versionstring=", argv[Inc]))
+		{
+			SubStrings.Extract(Pkg.VersionString, sizeof Pkg.VersionString, "=", NULL, argv[Inc]);
+		}
+		else if (SubStrings.StartsWith("--arch=", argv[Inc]))
+		{
+			SubStrings.Extract(Pkg.Arch, sizeof Pkg.Arch, "=", NULL, argv[Inc]);
+		}
+		else if (SubStrings.StartsWith("--packagegeneration=", argv[Inc]))
+		{
+			char Generation[64];
+			SubStrings.Extract(Generation, sizeof Generation, "=", NULL, argv[Inc]);
+			
+			Pkg.PackageGeneration = atoi(Generation);
+		}
+		else if (SubStrings.StartsWith("--preinstallcmd=", argv[Inc]))
+		{
+			SubStrings.Extract(Pkg.Cmds.PreInstall, sizeof Pkg.Cmds.PreInstall, "=", NULL, argv[Inc]);
+		}
+		else if (SubStrings.StartsWith("--postinstallcmd=", argv[Inc]))
+		{
+			SubStrings.Extract(Pkg.Cmds.PostInstall, sizeof Pkg.Cmds.PostInstall, "=", NULL, argv[Inc]);
+		}
+		else if (SubStrings.StartsWith("--preuninstallcmd=", argv[Inc]))
+		{
+			SubStrings.Extract(Pkg.Cmds.PreUninstall, sizeof Pkg.Cmds.PreUninstall, "=", NULL, argv[Inc]);
+		}
+		else if (SubStrings.StartsWith("--postuninstallcmd=", argv[Inc]))
+		{
+			SubStrings.Extract(Pkg.Cmds.PostUninstall, sizeof Pkg.Cmds.PostUninstall, "=", NULL, argv[Inc]);
+		}
+		else if (SubStrings.StartsWith("--preupdatecmd=", argv[Inc]))
+		{
+			SubStrings.Extract(Pkg.Cmds.PreUpdate, sizeof Pkg.Cmds.PreUpdate, "=", NULL, argv[Inc]);
+		}
+		else if (SubStrings.StartsWith("--postupdatecmd=", argv[Inc]))
+		{
+			SubStrings.Extract(Pkg.Cmds.PostUpdate, sizeof Pkg.Cmds.PostUpdate, "=", NULL, argv[Inc]);
+		}
+		else
+		{
+			fprintf(stderr, "Bad argument \"%s\" for supercommand \"%s\".\n", argv[Inc], argv[1]);
+			exit(1);
+		}
+		
+	}
+
 	
 	return 0;
 }

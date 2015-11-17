@@ -25,6 +25,8 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <sys/stat.h>
 #include <openssl/sha.h>
 #include <errno.h>
+#include <pwd.h>
+#include <grp.h>
 #include "packrat.h"
 #include "substrings/substrings.h"
 
@@ -324,12 +326,29 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
 	{
 		const char *LineData = CurLine + 2; //Plus the 'd ' or 'f '
+		char User[256], Group[256];
+		char ModeText[64];
+		uid_t UID;
+		gid_t GID;
 		
-		snprintf(Path1, sizeof Path1, "%s/%s", PackageDir, LineData);
-		snprintf(Path2, sizeof Path2, "%s/%s", Sysroot, LineData);
+		const char *Jump = LineData;
+		
+		SubStrings.CopyUntilC(ModeText, sizeof ModeText, &Jump, " ", true);
+		
+		struct FileAttributes Attributes;
+		Attributes.Mode = strtol(ModeText, NULL, 8);
+		SubStrings.CopyUntilC(Attributes.User, sizeof Attributes.User, &Jump, ":", true);
+		SubStrings.CopyUntilC(Attributes.Group, sizeof Attributes.Group, &Jump, " ", true);
+		
+		if (!Files_TextUserAndGroupToIDs(User, Group, &UID, &GID)) return false;
+		
+		const char *const ActualPath = Jump;
+		
+		snprintf(Path1, sizeof Path1, "%s/%s", PackageDir, ActualPath);
+		snprintf(Path2, sizeof Path2, "%s/%s", Sysroot, ActualPath);
 		if (*CurLine == 'd')
 		{
-			Files_Mkdir(Path1, Path2); //We don't care much if this fails, it updates the mode if the directory exists.
+			Files_Mkdir(Path1, Path2, &Attributes); //We don't care much if this fails, it updates the mode if the directory exists.
 		}
 		else if (*CurLine == 'f')
 		{
@@ -340,11 +359,11 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 			
 			if (S_ISLNK(FileStat.st_mode))
 			{
-				if (!Files_SymlinkCopy(Path1, Path2, true)) return false;
+				if (!Files_SymlinkCopy(Path1, Path2, &Attributes, true)) return false;
 			}
 			else
 			{
-				if (!Files_FileCopy(Path1, Path2, true)) return false;
+				if (!Files_FileCopy(Path1, Path2, &Attributes, true)) return false;
 			}
 		}
 	}
@@ -361,6 +380,12 @@ bool Package_UninstallFiles(const char *PackageID, const char *Sysroot, const ch
 	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
 	{
 		const char *LineData = CurLine + 2;
+		
+		
+		//Twice, to get to the file path.
+		LineData = SubStrings.Line.WhitespaceJump(LineData);
+		LineData = SubStrings.Line.WhitespaceJump(LineData);
+		
 		
 		switch (*CurLine)
 		{
@@ -407,14 +432,32 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 	{
 		const char *LineData = Line + 2;
 		
+		char User[256], Group[256];
+		char ModeText[64];
+		uid_t UID;
+		gid_t GID;
+		
+		const char *Jump = LineData;
+		
+		SubStrings.CopyUntilC(ModeText, sizeof ModeText, &Jump, " ", true);
+		
+		struct FileAttributes Attributes;
+		Attributes.Mode = strtol(ModeText, NULL, 8);
+		SubStrings.CopyUntilC(Attributes.User, sizeof Attributes.User, &Jump, ":", true);
+		SubStrings.CopyUntilC(Attributes.Group, sizeof Attributes.Group, &Jump, " ", true);
+		
+		if (!Files_TextUserAndGroupToIDs(User, Group, &UID, &GID)) return false;
+		
+		const char *const ActualPath = Jump;
+		
 		//Incoming path.
-		snprintf(Path1, sizeof Path1, "%s/%s", InputDir, LineData);
+		snprintf(Path1, sizeof Path1, "%s/%s", InputDir, ActualPath);
 		//Outgoing path.
-		snprintf(Path2, sizeof Path2, "%s/%s", PackageDir, LineData);
+		snprintf(Path2, sizeof Path2, "%s/%s", PackageDir, ActualPath);
 		
 		if (*Line == 'd')
 		{
-			Files_Mkdir(Path1, Path2);
+			Files_Mkdir(Path1, Path2, &Attributes);
 		}
 		else if (*Line == 'f')
 		{
@@ -426,11 +469,11 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 			
 			if (S_ISLNK(FileStat.st_mode))
 			{
-				Files_SymlinkCopy(Path1, Path2, false);
+				Files_SymlinkCopy(Path1, Path2, &Attributes, false);
 			}
 			else
 			{
-				Files_FileCopy(Path1, Path2, false);
+				Files_FileCopy(Path1, Path2, &Attributes, false);
 			}
 		}
 	}
@@ -468,6 +511,11 @@ static bool Package_MakeAllChecksums(const char *Directory, const char *FileList
 		if (*LineBuf == 'd') continue; //We don't deal with directories.
 		
 		const char *LineData = LineBuf + (sizeof "f " - 1);
+		
+		//Jump past permissions
+		LineData = SubStrings.Line.WhitespaceJump(LineData);
+		//Jump past user/group
+		LineData = SubStrings.Line.WhitespaceJump(LineData);
 		
 		snprintf(PathBuf, sizeof PathBuf, "%s/%s", Directory, LineData);
 		
@@ -574,11 +622,13 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		{
 			continue;
 		}
-		
+	
+		struct passwd *FileUser = getpwuid(FileStat.st_gid);
+		struct group *FileGroup = getgrgid(FileStat.st_gid);
 		if (S_ISDIR(FileStat.st_mode))
 		{ //It's a directory.
 			
-			snprintf(OutStream, sizeof OutStream, "d %s\n", NewPath);
+			snprintf(OutStream, sizeof OutStream, "d %o %s:%s %s\n", FileStat.st_mode, FileUser->pw_name, FileGroup->gr_name, NewPath);
 			fwrite(OutStream, 1, strlen(OutStream), OutDesc); //Write the directory name.
 			
 			//Now we recurse and call the same function to process the subdir.
@@ -598,7 +648,7 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		}
 		//It's a file.
 		
-		snprintf(OutStream, sizeof OutStream, "f %s\n", NewPath);
+		snprintf(OutStream, sizeof OutStream, "f %o %s:%s %s\n", FileStat.st_mode, FileUser->pw_name, FileGroup->gr_name, NewPath);
 		fwrite(OutStream, 1, strlen(OutStream), OutDesc); 
 		
 	}

@@ -44,6 +44,12 @@ bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot)
 	
 	if (!DB_Disk_GetMetadata(NULL, &Pkg)) return false;
 	
+	if (!Config_ArchPresent(Pkg.Arch))
+	{ //While not explicitly needed for the update operation, it gives the user some useful info.
+		fprintf(stderr, "Package's architecture %s not supported on this system.\n", Pkg.Arch);
+		return false;
+	}
+	
 	struct PackageList *OldPackage = DB_Lookup(Pkg.PackageID, Pkg.Arch);
 	
 	if (!OldPackage)
@@ -51,6 +57,8 @@ bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot)
 		fprintf(stderr, "Package %s.%s is not installed, so can't update it.\n", Pkg.PackageID, Pkg.Arch);
 		return false;
 	}
+	
+	
 
 	return true;
 }

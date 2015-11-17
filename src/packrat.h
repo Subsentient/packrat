@@ -19,6 +19,10 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #define _PACKRAT_H_
 
 #include <stdbool.h>
+#include <sys/stat.h> //For mode_t
+#include <pwd.h> //For uid_t
+#include <grp.h> //For gid_t
+
 #define CONFIGFILE_PATH "/etc/packrat.conf"
 #define DB_PATH "/var/packrat/pkgdb/"
 #define DBCORE_SIZE ((('z'-'a')+1) + (('9'-'0')+1))
@@ -30,10 +34,9 @@ struct PackageList
 	{
 		unsigned PackageGeneration; //The build number of this package, so we can fix busted packages of the same version of software.
 
-		char Arch[64]; //Package architecture
 		char PackageID[256]; //name of the package.
 		char VersionString[128]; //complete version of the software we're dealing with
-		
+		char Arch[64]; //Package architecture
 		struct
 		{ //Commands executed at various stages of the install process.
 			char PreInstall[256];
@@ -50,6 +53,13 @@ struct PackageList
 
 };
 
+struct FileAttributes
+{
+	mode_t Mode;
+	char User[256];
+	char Group[256];
+};
+
 //Functions
 
 //config.c
@@ -64,9 +74,10 @@ bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath);
 bool Package_UninstallFiles(const char *PackageID, const char *Sysroot, const char *FileListBuf);
 
 //files.c
-bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite);
-bool Files_Mkdir(const char *Source, const char *Destination);
-bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite);
+bool Files_FileCopy(const char *Source, const char *Destination, struct FileAttributes *Attributes, bool Overwrite);
+bool Files_Mkdir(const char *Source, const char *Destination, struct FileAttributes *Attributes);
+bool Files_SymlinkCopy(const char *Source, const char *Destination, struct FileAttributes *Attributes, bool Overwrite);
+bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut);
 
 //db.c
 const char *DB_Disk_GetChecksums(const char *PackageID, const char *Sysroot);
