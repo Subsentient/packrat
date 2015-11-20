@@ -75,6 +75,12 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
+	if (!DB_Disk_LoadDB(Sysroot))
+	{
+		fprintf(stderr, "Unable to load packrat database.\n");
+		return false;
+	}
+	
 	//Extract the pkrt file into a temporary directory, which is given back to us in Path.
 	if (!Package_ExtractPackage(PkgPath, Sysroot, Path, sizeof Path))
 	{
@@ -88,6 +94,18 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	struct Package Pkg;
 	//Check metadata to see if the architecture is supported.
 	if (!DB_Disk_GetMetadata(NULL, &Pkg)) return false;
+	
+	//Already installed?
+	struct PackageList *Lookup = DB_Lookup(Pkg.PackageID, Pkg.Arch);
+	
+	//Yup, already installed.
+	if (Lookup &&
+		SubStrings.Compare(Lookup->Pkg.VersionString, Pkg.VersionString) &&
+		Lookup->Pkg.PackageGeneration == Pkg.PackageGeneration)
+	{
+		fprintf(stderr, "Package %s_%s-%u.%s is already installed.\n", Lookup->Pkg.PackageID, Lookup->Pkg.VersionString, Lookup->Pkg.PackageGeneration, Lookup->Pkg.Arch);
+		return false;
+	}
 	
 	if (!Config_ArchPresent(Pkg.Arch))
 	{
