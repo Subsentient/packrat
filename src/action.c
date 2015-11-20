@@ -33,7 +33,7 @@ bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
-	if (!Package_ExtractPackage(PkgPath, Path, sizeof Path))
+	if (!Package_ExtractPackage(PkgPath, Sysroot, Path, sizeof Path))
 	{
 		return false;
 	}
@@ -76,7 +76,7 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	}
 	
 	//Extract the pkrt file into a temporary directory, which is given back to us in Path.
-	if (!Package_ExtractPackage(PkgPath, Path, sizeof Path))
+	if (!Package_ExtractPackage(PkgPath, Sysroot, Path, sizeof Path))
 	{
 		return false;
 	}
@@ -92,6 +92,14 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	if (!Config_ArchPresent(Pkg.Arch))
 	{
 		fprintf(stderr, "Package's architecture %s not supported on this system.\n", Pkg.Arch);
+		return false;
+	}
+	
+	//Verify checksums to ensure file integrity.
+	if (!Package_VerifyChecksums(Path))
+	{
+		fprintf(stderr, "%s_%s-%u.%s: Package file checksum failure; package may be damaged.\n",
+				Pkg.PackageID, Pkg.VersionString, Pkg.PackageGeneration, Pkg.Arch);
 		return false;
 	}
 	

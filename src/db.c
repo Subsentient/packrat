@@ -259,6 +259,11 @@ bool DB_Disk_GetMetadata(const char *Path, struct Package *OutPkg)
 			const char *Data = Text + (sizeof "Arch=" - 1);
 			SubStrings.Copy(OutPkg->Arch, Data, sizeof OutPkg->Arch);
 		}
+		else if (SubStrings.StartsWith("Description=", Text))
+		{
+			const char *Data = Text + (sizeof "Description=" - 1);
+			SubStrings.Copy(OutPkg->Description, Data, sizeof OutPkg->Description);
+		}
 		else if (SubStrings.StartsWith("PackageGeneration=", Text))
 		{
 			const char *Data = Text + (sizeof "Arch=" - 1);
@@ -375,6 +380,11 @@ static bool DB_Disk_LoadPackage(const char *Path)
 			const char *Data = Text + (sizeof "PackageGeneration=" - 1);
 			Pkg.PackageGeneration = atoi(Data);
 		}
+		else if (SubStrings.StartsWith("Description=", Text))
+		{
+			const char *Data = Text + (sizeof "Description=" - 1);
+			SubStrings.Copy(Pkg.Description, Data, sizeof Pkg.Description);
+		}
 		else continue; //Ignore anything that doesn't make sense.
 	}
 	
@@ -480,19 +490,22 @@ bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot)
 	///File list
 	//Build path for incoming file.
 	snprintf(Path, sizeof Path, "%s/filelist.txt", InInfoDir);
+
+	
+	struct FileAttributes Attributes = Files_GetDefaultAttributes();
 	
 	//We overwrite an earlier version.
-	if (!Files_FileCopy(Path, "filelist.txt", true)) return false;
+	if (!Files_FileCopy(Path, "filelist.txt", &Attributes, true)) return false;
 	
 	///Metadata
 	snprintf(Path, sizeof Path, "%s/metadata.txt", InInfoDir);
 	
-	if (!Files_FileCopy(Path, "metadata.txt", true)) return false;
+	if (!Files_FileCopy(Path, "metadata.txt", &Attributes, true)) return false;
 	
 	///Checksums
 	snprintf(Path, sizeof Path, "%s/checksums.txt", InInfoDir);
 	
-	if (!Files_FileCopy(Path, "checksums.txt", true)) return false;
+	if (!Files_FileCopy(Path, "checksums.txt", &Attributes, true)) return false;
 	
 	return true;
 }

@@ -37,7 +37,7 @@ static bool Package_MakeAllChecksums(const char *Directory, const char *FileList
 static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList);
 static bool Package_CompressPackage(const char *PackageTempDir);
 
-bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize)
+bool Package_ExtractPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize)
 {	
 	//Build some random numbers to use as part of the temp directory name.
 	unsigned DirNum1 = rand();
@@ -46,7 +46,7 @@ bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, uns
 	
 	char DirPath[4096];
 	//Put the temp directory name together
-	snprintf(DirPath, sizeof DirPath, "/var/packrat/cache/packrat_pkg_%u.%u.%u", DirNum1, DirNum2, DirNum3);
+	snprintf(DirPath, sizeof DirPath, "%s/var/packrat/cache/packrat_pkg_%u.%u.%u", Sysroot, DirNum1, DirNum2, DirNum3);
 	
 	///Send the directory path back to the caller.
 	SubStrings.Copy(PkgDirPath, DirPath, PkgDirPathSize);
@@ -304,7 +304,12 @@ bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath)
 		snprintf(TmpBuf, sizeof TmpBuf, "PostUninstall=%s\n", Pkg->Cmds.PostUninstall);
 		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
 	}
-		
+	
+	if (*Pkg->Description)
+	{
+		snprintf(TmpBuf, sizeof TmpBuf, "Description=%s\n", Pkg->Description);
+		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
+	}
 	
 	//Write the post-install commands.
 	if (*MetadataBuf)
@@ -326,7 +331,6 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
 	{
 		const char *LineData = CurLine + 2; //Plus the 'd ' or 'f '
-		char User[256], Group[256];
 		char ModeText[64];
 		uid_t UID;
 		gid_t GID;
@@ -340,7 +344,7 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 		SubStrings.CopyUntilC(Attributes.User, sizeof Attributes.User, &Jump, ":", true);
 		SubStrings.CopyUntilC(Attributes.Group, sizeof Attributes.Group, &Jump, " ", true);
 		
-		if (!Files_TextUserAndGroupToIDs(User, Group, &UID, &GID)) return false;
+		if (!Files_TextUserAndGroupToIDs(Attributes.User, Attributes.Group, &UID, &GID)) return false;
 		
 		const char *const ActualPath = Jump;
 		
@@ -399,7 +403,10 @@ bool Package_UninstallFiles(const char *PackageID, const char *Sysroot, const ch
 				if (lstat(Path, &FileStat) != 0) continue;
 				
 				//Delete it.
-				unlink(Path);
+				if (unlink(Path) != 0)
+				{ //Just warn us on failure.
+					fprintf(stderr, "WARNING: Unable to uninstall file \"%s\"\n", Path);
+				}
 			}
 		}
 	}
@@ -411,11 +418,18 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 	
 	struct stat FileStat;
 	
-	if (stat(FileList, &FileStat) != 0) return false;
+	if (stat(FileList, &FileStat) != 0)
+	{
+		puts("Failed to stat");
+		return false;
 	
+	}
 	FILE *Desc = fopen(FileList, "rb");
-	if (!Desc) return false;
-	
+	if (!Desc)
+	{
+		puts("Descriptor failure.");
+		return false;
+	}
 	char *Buffer = malloc(FileStat.st_size + 1);
 	fread(Buffer, 1, FileStat.st_size, Desc);
 	Buffer[FileStat.st_size] = '\0';
@@ -432,7 +446,6 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 	{
 		const char *LineData = Line + 2;
 		
-		char User[256], Group[256];
 		char ModeText[64];
 		uid_t UID;
 		gid_t GID;
@@ -445,9 +458,13 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 		Attributes.Mode = strtol(ModeText, NULL, 8);
 		SubStrings.CopyUntilC(Attributes.User, sizeof Attributes.User, &Jump, ":", true);
 		SubStrings.CopyUntilC(Attributes.Group, sizeof Attributes.Group, &Jump, " ", true);
-		
-		if (!Files_TextUserAndGroupToIDs(User, Group, &UID, &GID)) return false;
-		
+
+		if (!Files_TextUserAndGroupToIDs(Attributes.User, Attributes.Group, &UID, &GID))
+		{
+			free(Buffer);
+			puts("Ownership failure");
+			return false;
+		}
 		const char *const ActualPath = Jump;
 		
 		//Incoming path.
@@ -464,6 +481,7 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 			if (lstat(Path1, &FileStat) != 0)
 			{
 				free(Buffer);
+				puts("File stat failure");
 				return false;
 			}
 			
@@ -584,9 +602,78 @@ bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned Ou
 	
 	return true;
 }
+
+bool Package_VerifyChecksums(const char *PackageDir)
+{
+	char StartingCWD[2048];
+	
+	if (getcwd(StartingCWD, sizeof StartingCWD) == NULL) return false;
+	
+	if (chdir(PackageDir) != 0) return false;
+	
+	struct stat FileStat;
+	if (stat("info/checksums.txt", &FileStat) != 0)
+	{
+		chdir(StartingCWD);
+		return false;
+	}
+	
+	FILE *Desc = fopen("info/checksums.txt", "rb");
+	
+	if (!Desc)
+	{
+		chdir(StartingCWD);
+		return false;
+	}
+	
+	char *Buf = calloc(FileStat.st_size + 1, 1);
+	
+	fread(Buf, 1, FileStat.st_size, Desc);
+	Buf[FileStat.st_size] = '\0';
+	
+	fclose(Desc);
+	
+	char Line[4096];
+	const char *Iter = Buf;
+	
+	//Needs to be this size for Split()
+	char Checksum[4096], Path[4096];
+	
+	//Change to files directory.
+	if (chdir("files") != 0)
+	{
+		chdir(StartingCWD);
+		free(Buf);
+		return false;
+	}
+	
+	while (SubStrings.Line.GetLine(Line, sizeof Line, &Iter))
+	{
+		if (!SubStrings.Split(Checksum, Path, " ", Line, SPLIT_NOKEEP))
+		{
+			chdir(StartingCWD);
+			free(Buf);
+			return false;
+		}
 		
-
-
+		char NewChecksum[256];
+		
+		Package_MakeFileChecksum(Path, NewChecksum, sizeof NewChecksum);
+		
+		if (!SubStrings.Compare(NewChecksum, Checksum))
+		{
+			chdir(StartingCWD);
+			free(Buf);
+			return false;
+		}
+	}
+	
+	chdir(StartingCWD);
+	free(Buf);
+	return true;
+}
+		
+	
 static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath)
 {
 	struct dirent *File = NULL;

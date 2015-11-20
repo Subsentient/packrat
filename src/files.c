@@ -25,6 +25,24 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "substrings/substrings.h"
 #include "packrat.h"
 
+struct FileAttributes Files_GetDefaultAttributes(void)
+{
+	struct FileAttributes Attributes = { .Mode = 0644, .User = "root" };
+	
+	struct group *Group = getgrgid(0);
+	
+	if (!Group)
+	{
+		SubStrings.Copy(Attributes.Group, "root", sizeof Attributes.Group);
+		return Attributes;
+	}
+
+	SubStrings.Copy(Attributes.Group, Group->gr_name, sizeof Attributes.Group);
+	
+	return Attributes;
+}
+	
+	
 bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut)
 {
 	struct passwd *UserVal = getpwnam(User);

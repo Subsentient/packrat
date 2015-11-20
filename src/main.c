@@ -33,6 +33,8 @@ enum OperationMode
 
 int main(int argc, char **argv)
 {
+	setvbuf(stdout, NULL, _IONBF, 0);
+	setvbuf(stderr, NULL, _IONBF, 0);
 	enum OperationMode Mode = OP_NONE;
 	
 	struct Package Pkg = { .PackageGeneration = 0 }; //Zero-initialized
@@ -66,15 +68,36 @@ int main(int argc, char **argv)
 	
 	unsigned Inc = 2;
 	
+	char CreationDirectory[4096] = { '\0' };
+	char Sysroot[4096] = { "/" };
+	char InFile[4096] = { '\0' };
+	
 	for (; Inc < argc; ++Inc)
 	{
+		
 		if (SubStrings.StartsWith("--pkgid=", argv[Inc]))
 		{
 			SubStrings.Extract(Pkg.PackageID, sizeof Pkg.PackageID, "=", NULL,  argv[Inc]);
 		}
+		else if (SubStrings.StartsWith("--sysroot=", argv[Inc]))
+		{
+			SubStrings.Extract(Sysroot, sizeof Sysroot, "=", NULL, argv[Inc]);
+		}
+		else if (SubStrings.StartsWith("--file=", argv[Inc]))
+		{
+			SubStrings.Extract(InFile, sizeof InFile, "=", NULL, argv[Inc]);
+		}
+		else if (SubStrings.StartsWith("--directory=", argv[Inc]))
+		{
+			SubStrings.Extract(CreationDirectory, sizeof CreationDirectory, "=", NULL, argv[Inc]);
+		}
 		else if (SubStrings.StartsWith("--versionstring=", argv[Inc]))
 		{
 			SubStrings.Extract(Pkg.VersionString, sizeof Pkg.VersionString, "=", NULL, argv[Inc]);
+		}
+		else if (SubStrings.StartsWith("--description=", argv[Inc]))
+		{
+			SubStrings.Extract(Pkg.Description, sizeof Pkg.Description, "=", NULL, argv[Inc]);
 		}
 		else if (SubStrings.StartsWith("--arch=", argv[Inc]))
 		{
@@ -118,7 +141,22 @@ int main(int argc, char **argv)
 		}
 		
 	}
-
+		
+	switch (Mode)
+	{
+		case OP_CREATE:
+		{
+			Package_CreatePackage(&Pkg, CreationDirectory);
+			exit(0);
+			break;
+		}
+		case OP_INSTALL:
+		{
+			return !Action_InstallPackage(InFile, Sysroot);
+		}
+		default:
+			break;
+	}
 	
 	return 0;
 }

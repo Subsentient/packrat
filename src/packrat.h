@@ -36,6 +36,7 @@ struct PackageList
 
 		char PackageID[256]; //name of the package.
 		char VersionString[128]; //complete version of the software we're dealing with
+		char Description[256]; //A brief summary of the package contents, optional**
 		char Arch[64]; //Package architecture
 		struct
 		{ //Commands executed at various stages of the install process.
@@ -62,22 +63,30 @@ struct FileAttributes
 
 //Functions
 
+//action.c
+bool Action_InstallPackage(const char *PkgPath, const char *Sysroot);
+bool Action_UninstallPackage(const char *PackageID, const char *Arch, const char *Sysroot);
+bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot);
+
 //config.c
 bool Config_ArchPresent(const char *CheckArch);
 bool Config_LoadConfig(void);
 //package.c
-bool Package_ExtractPackage(const char *AbsolutePathToPkg, char *PkgDirPath, unsigned PkgDirPathSize);
+bool Package_ExtractPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize);
 bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
 bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize);
 bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf);
 bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath);
 bool Package_UninstallFiles(const char *PackageID, const char *Sysroot, const char *FileListBuf);
+bool Package_CreatePackage(const struct Package *Job, const char *Directory);
+bool Package_VerifyChecksums(const char *PackageDir);
 
 //files.c
 bool Files_FileCopy(const char *Source, const char *Destination, struct FileAttributes *Attributes, bool Overwrite);
 bool Files_Mkdir(const char *Source, const char *Destination, struct FileAttributes *Attributes);
 bool Files_SymlinkCopy(const char *Source, const char *Destination, struct FileAttributes *Attributes, bool Overwrite);
 bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut);
+struct FileAttributes Files_GetDefaultAttributes(void);
 
 //db.c
 const char *DB_Disk_GetChecksums(const char *PackageID, const char *Sysroot);
