@@ -168,11 +168,11 @@ const char *DB_Disk_GetChecksums(const char *PackageID, const char *Sysroot)
 	return Buffer;
 }
 
-const char *DB_Disk_GetFileList(const char *PackageID, const char *Sysroot)
+const char *DB_Disk_GetFileList(const char *PackageID, const char *Arch, const char *Sysroot)
 { //Returns an allocated string that contains the file list.
 	char Path[4096];
 	
-	snprintf(Path, sizeof Path, "%s/%s%s/filelist.txt", Sysroot, DB_PATH, PackageID);
+	snprintf(Path, sizeof Path, "%s/%s/%s.%s/filelist.txt", Sysroot, DB_PATH, PackageID, Arch);
 	
 	struct stat FileStat;
 	
@@ -242,61 +242,63 @@ bool DB_Disk_GetMetadata(const char *Path, struct Package *OutPkg)
 	
 	const char *Iter = Text;
 	
-	while (SubStrings.Line.GetLine(Text, sizeof Text, &Iter))
+	char Line[4096];
+	
+	while (SubStrings.Line.GetLine(Line, sizeof Line, &Iter))
 	{
-		if (SubStrings.StartsWith("PackageID=", Text))
+		if (SubStrings.StartsWith("PackageID=", Line))
 		{
-			const char *Data = Text + (sizeof "PackageID=" - 1);
+			const char *Data = Line + (sizeof "PackageID=" - 1);
 			SubStrings.Copy(OutPkg->PackageID, Data, sizeof OutPkg->PackageID);
 		}
-		else if (SubStrings.StartsWith("VersionString=", Text))
+		else if (SubStrings.StartsWith("VersionString=", Line))
 		{
-			const char *Data = Text + (sizeof "VersionString=" - 1);
+			const char *Data = Line + (sizeof "VersionString=" - 1);
 			SubStrings.Copy(OutPkg->VersionString, Data, sizeof OutPkg->VersionString);
 		}
-		else if (SubStrings.StartsWith("Arch=", Text))
+		else if (SubStrings.StartsWith("Arch=", Line))
 		{
-			const char *Data = Text + (sizeof "Arch=" - 1);
+			const char *Data = Line + (sizeof "Arch=" - 1);
 			SubStrings.Copy(OutPkg->Arch, Data, sizeof OutPkg->Arch);
 		}
-		else if (SubStrings.StartsWith("Description=", Text))
+		else if (SubStrings.StartsWith("Description=", Line))
 		{
-			const char *Data = Text + (sizeof "Description=" - 1);
+			const char *Data = Line + (sizeof "Description=" - 1);
 			SubStrings.Copy(OutPkg->Description, Data, sizeof OutPkg->Description);
 		}
-		else if (SubStrings.StartsWith("PackageGeneration=", Text))
+		else if (SubStrings.StartsWith("PackageGeneration=", Line))
 		{
-			const char *Data = Text + (sizeof "Arch=" - 1);
+			const char *Data = Line + (sizeof "Arch=" - 1);
 			OutPkg->PackageGeneration = atoi(Data);
 		}
-		else if (SubStrings.StartsWith("PreInstall=", Text))
+		else if (SubStrings.StartsWith("PreInstall=", Line))
 		{
-			const char *Data = Text + (sizeof "PreInstall=" - 1);
+			const char *Data = Line + (sizeof "PreInstall=" - 1);
 			SubStrings.Copy(OutPkg->Cmds.PreInstall, Data, sizeof OutPkg->Cmds.PreInstall);
 		}
-		else if (SubStrings.StartsWith("PostInstall=", Text))
+		else if (SubStrings.StartsWith("PostInstall=", Line))
 		{
-			const char *Data = Text + (sizeof "PostInstall=" - 1);
+			const char *Data = Line + (sizeof "PostInstall=" - 1);
 			SubStrings.Copy(OutPkg->Cmds.PostInstall, Data, sizeof OutPkg->Cmds.PostInstall);
 		}
-		else if (SubStrings.StartsWith("PreUninstall=", Text))
+		else if (SubStrings.StartsWith("PreUninstall=", Line))
 		{
-			const char *Data = Text + (sizeof "PreUninstall=" - 1);
+			const char *Data = Line + (sizeof "PreUninstall=" - 1);
 			SubStrings.Copy(OutPkg->Cmds.PreUninstall, Data, sizeof OutPkg->Cmds.PreUninstall);
 		}
-		else if (SubStrings.StartsWith("PostUninstall=", Text))
+		else if (SubStrings.StartsWith("PostUninstall=", Line))
 		{
-			const char *Data = Text + (sizeof "PostUninstall=" - 1);
+			const char *Data = Line + (sizeof "PostUninstall=" - 1);
 			SubStrings.Copy(OutPkg->Cmds.PostUninstall, Data, sizeof OutPkg->Cmds.PostUninstall);
 		}
-		else if (SubStrings.StartsWith("PreUpdate=", Text))
+		else if (SubStrings.StartsWith("PreUpdate=", Line))
 		{
-			const char *Data = Text + (sizeof "PreUpdate=" - 1);
+			const char *Data = Line + (sizeof "PreUpdate=" - 1);
 			SubStrings.Copy(OutPkg->Cmds.PreUpdate, Data, sizeof OutPkg->Cmds.PreUpdate);
 		}
-		else if (SubStrings.StartsWith("PostUpdate=", Text))
+		else if (SubStrings.StartsWith("PostUpdate=", Line))
 		{
-			const char *Data = Text + (sizeof "PostUpdate=" - 1);
+			const char *Data = Line + (sizeof "PostUpdate=" - 1);
 			SubStrings.Copy(OutPkg->Cmds.PostUpdate, Data, sizeof OutPkg->Cmds.PostUpdate);
 		}
 		else continue; //Ignore anything that doesn't make sense.
@@ -317,7 +319,7 @@ static bool DB_Disk_LoadPackage(const char *Path)
 	FILE *Desc = fopen(NewPath, "rb");
 	
 	if (!Desc) return false;
-	
+
 
 	char Text[FileStat.st_size + 1]; /*a variable length array. Might be faster than calling malloc(),
 	* and since this function will be used a lot, seems appropriate. File size should not total even 1kb.*/
@@ -327,62 +329,63 @@ static bool DB_Disk_LoadPackage(const char *Path)
 	
 	const char *Iter = Text;
 	
+	char Line[4096];
 	struct Package Pkg;
-	while (SubStrings.Line.GetLine(Text, sizeof Text, &Iter))
+	while (SubStrings.Line.GetLine(Line, sizeof Line, &Iter))
 	{
-		if (SubStrings.StartsWith("PackageID=", Text))
+		if (SubStrings.StartsWith("PackageID=", Line))
 		{
-			const char *Data = Text + (sizeof "PackageID=" - 1);
+			const char *Data = Line + (sizeof "PackageID=" - 1);
 			SubStrings.Copy(Pkg.PackageID, Data, sizeof Pkg.PackageID);
 		}
-		else if (SubStrings.StartsWith("VersionString=", Text))
+		else if (SubStrings.StartsWith("VersionString=", Line))
 		{
-			const char *Data = Text + (sizeof "VersionString=" - 1);
+			const char *Data = Line + (sizeof "VersionString=" - 1);
 			SubStrings.Copy(Pkg.VersionString, Data, sizeof Pkg.VersionString);
 		}
-		else if (SubStrings.StartsWith("Arch=", Text))
+		else if (SubStrings.StartsWith("Arch=", Line))
 		{
-			const char *Data = Text + (sizeof "Arch=" - 1);
+			const char *Data = Line + (sizeof "Arch=" - 1);
 			SubStrings.Copy(Pkg.Arch, Data, sizeof Pkg.Arch);
 		}
-		else if (SubStrings.StartsWith("PreInstall=", Text))
+		else if (SubStrings.StartsWith("PreInstall=", Line))
 		{
-			const char *Data = Text + (sizeof "PreInstall=" - 1);
+			const char *Data = Line + (sizeof "PreInstall=" - 1);
 			SubStrings.Copy(Pkg.Cmds.PreInstall, Data, sizeof Pkg.Cmds.PreInstall);
 		}
-		else if (SubStrings.StartsWith("PostInstall=", Text))
+		else if (SubStrings.StartsWith("PostInstall=", Line))
 		{
-			const char *Data = Text + (sizeof "PostInstall=" - 1);
+			const char *Data = Line + (sizeof "PostInstall=" - 1);
 			SubStrings.Copy(Pkg.Cmds.PostInstall, Data, sizeof Pkg.Cmds.PostInstall);
 		}
-		else if (SubStrings.StartsWith("PreUninstall=", Text))
+		else if (SubStrings.StartsWith("PreUninstall=", Line))
 		{
-			const char *Data = Text + (sizeof "PreUninstall=" - 1);
+			const char *Data = Line + (sizeof "PreUninstall=" - 1);
 			SubStrings.Copy(Pkg.Cmds.PreUninstall, Data, sizeof Pkg.Cmds.PreUninstall);
 		}
-		else if (SubStrings.StartsWith("PostUninstall=", Text))
+		else if (SubStrings.StartsWith("PostUninstall=", Line))
 		{
-			const char *Data = Text + (sizeof "PostUninstall=" - 1);
+			const char *Data = Line + (sizeof "PostUninstall=" - 1);
 			SubStrings.Copy(Pkg.Cmds.PostUninstall, Data, sizeof Pkg.Cmds.PostUninstall);
 		}
-		else if (SubStrings.StartsWith("PreUpdate=", Text))
+		else if (SubStrings.StartsWith("PreUpdate=", Line))
 		{
-			const char *Data = Text + (sizeof "PreUpdate=" - 1);
+			const char *Data = Line + (sizeof "PreUpdate=" - 1);
 			SubStrings.Copy(Pkg.Cmds.PreUpdate, Data, sizeof Pkg.Cmds.PreUpdate);
 		}
-		else if (SubStrings.StartsWith("PostUpdate=", Text))
+		else if (SubStrings.StartsWith("PostUpdate=", Line))
 		{
-			const char *Data = Text + (sizeof "PostUpdate=" - 1);
+			const char *Data = Line + (sizeof "PostUpdate=" - 1);
 			SubStrings.Copy(Pkg.Cmds.PostUpdate, Data, sizeof Pkg.Cmds.PostUpdate);
 		}
-		else if (SubStrings.StartsWith("PackageGeneration=", Text))
+		else if (SubStrings.StartsWith("PackageGeneration=", Line))
 		{
-			const char *Data = Text + (sizeof "PackageGeneration=" - 1);
+			const char *Data = Line + (sizeof "PackageGeneration=" - 1);
 			Pkg.PackageGeneration = atoi(Data);
 		}
-		else if (SubStrings.StartsWith("Description=", Text))
+		else if (SubStrings.StartsWith("Description=", Line))
 		{
-			const char *Data = Text + (sizeof "Description=" - 1);
+			const char *Data = Line + (sizeof "Description=" - 1);
 			SubStrings.Copy(Pkg.Description, Data, sizeof Pkg.Description);
 		}
 		else continue; //Ignore anything that doesn't make sense.
@@ -415,6 +418,9 @@ bool DB_Disk_LoadDB(const char *Sysroot)
 	
 	while ((File = readdir(CurDir)))
 	{
+		//Ignore . and ..
+		if (SubStrings.Compare(".", File->d_name) || SubStrings.Compare("..", File->d_name)) continue;
+		
 		Path[PathLen] = '\0';
 		SubStrings.Cat(Path, File->d_name, sizeof Path);
 		

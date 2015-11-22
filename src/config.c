@@ -32,16 +32,19 @@ static bool Config_ProcessConfig(const char *ConfigStream);
 static bool Config_AddArch(const char *NewArch);
 
 //Actual functions
-bool Config_LoadConfig(void)
+bool Config_LoadConfig(const char *Sysroot)
 {
 	struct stat FileStat;
 	
-	if (stat(CONFIGFILE_PATH, &FileStat) != 0)
+	char ConfigPath[4096];
+	snprintf(ConfigPath, sizeof ConfigPath, "%s/" CONFIGFILE_PATH, Sysroot);
+	
+	if (stat(ConfigPath, &FileStat) != 0)
 	{
 		return false;
 	}
 	
-	FILE *Descriptor = fopen(CONFIGFILE_PATH, "rb");
+	FILE *Descriptor = fopen(ConfigPath, "rb");
 	
 	if (!Descriptor) return false;
 	

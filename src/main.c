@@ -18,6 +18,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "substrings/substrings.h"
 #include "packrat.h"
 
@@ -33,6 +34,7 @@ enum OperationMode
 
 int main(int argc, char **argv)
 {
+	srand(time(NULL) ^ clock());
 	setvbuf(stdout, NULL, _IONBF, 0);
 	setvbuf(stderr, NULL, _IONBF, 0);
 	enum OperationMode Mode = OP_NONE;
@@ -48,11 +50,11 @@ int main(int argc, char **argv)
 	{
 		Mode = OP_INSTALL;
 	}
-	else if (!strcmp(argv[1], "remove"))
+	else if (!strcmp(argv[1], "remove") || !strcmp(argv[1], "uninstall"))
 	{
 		Mode = OP_REMOVE;
 	}
-	else if (!strcmp(argv[1], "update"))
+	else if (!strcmp(argv[1], "update") || !strcmp(argv[1], "upgrade"))
 	{
 		Mode = OP_UPDATE;
 	}
@@ -153,6 +155,10 @@ int main(int argc, char **argv)
 		case OP_INSTALL:
 		{
 			return !Action_InstallPackage(InFile, Sysroot);
+		}
+		case OP_REMOVE:
+		{
+			return !Action_UninstallPackage(Pkg.PackageID, *Pkg.Arch ? Pkg.Arch : NULL, Sysroot);
 		}
 		default:
 			break;

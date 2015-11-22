@@ -70,14 +70,15 @@ bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot);
 
 //config.c
 bool Config_ArchPresent(const char *CheckArch);
-bool Config_LoadConfig(void);
+bool Config_LoadConfig(const char *Sysroot);
+
 //package.c
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize);
 bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
 bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize);
 bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf);
 bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath);
-bool Package_UninstallFiles(const char *PackageID, const char *Sysroot, const char *FileListBuf);
+bool Package_UninstallFiles(const char *Sysroot, const char *FileListBuf);
 bool Package_CreatePackage(const struct Package *Job, const char *Directory);
 bool Package_VerifyChecksums(const char *PackageDir);
 
@@ -90,7 +91,7 @@ struct FileAttributes Files_GetDefaultAttributes(void);
 
 //db.c
 const char *DB_Disk_GetChecksums(const char *PackageID, const char *Sysroot);
-const char *DB_Disk_GetFileList(const char *PackageID, const char *Sysroot);
+const char *DB_Disk_GetFileList(const char *PackageID, const char *Arch, const char *Sysroot);
 const char *DB_Disk_GetFileListDyn(const char *InfoDir);
 bool DB_Disk_GetMetadata(const char *Path, struct Package *OutPkg);
 bool DB_Disk_LoadDB(const char *Sysroot);

@@ -348,8 +348,9 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 		
 		const char *const ActualPath = Jump;
 		
-		snprintf(Path1, sizeof Path1, "%s/%s", PackageDir, ActualPath);
+		snprintf(Path1, sizeof Path1, "%s/files/%s", PackageDir, ActualPath);
 		snprintf(Path2, sizeof Path2, "%s/%s", Sysroot, ActualPath);
+		
 		if (*CurLine == 'd')
 		{
 			Files_Mkdir(Path1, Path2, &Attributes); //We don't care much if this fails, it updates the mode if the directory exists.
@@ -369,12 +370,13 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 			{
 				if (!Files_FileCopy(Path1, Path2, &Attributes, true)) return false;
 			}
+
 		}
 	}
 	return true;
 }
 
-bool Package_UninstallFiles(const char *PackageID, const char *Sysroot, const char *FileListBuf)
+bool Package_UninstallFiles(const char *Sysroot, const char *FileListBuf)
 {
 	char CurLine[4096];
 	struct stat FileStat;
@@ -394,7 +396,7 @@ bool Package_UninstallFiles(const char *PackageID, const char *Sysroot, const ch
 		switch (*CurLine)
 		{
 			case 'd':
-				continue;
+				continue; //We don't delete directories.
 			case 'f':
 			{
 				//build a path for the file we're removing.
@@ -656,7 +658,7 @@ bool Package_VerifyChecksums(const char *PackageDir)
 			return false;
 		}
 		
-		char NewChecksum[256];
+		char NewChecksum[4096];
 		
 		Package_MakeFileChecksum(Path, NewChecksum, sizeof NewChecksum);
 		
