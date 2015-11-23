@@ -18,6 +18,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <time.h>
 #include "substrings/substrings.h"
 #include "packrat.h"
@@ -40,6 +41,12 @@ int main(int argc, char **argv)
 	enum OperationMode Mode = OP_NONE;
 	
 	struct Package Pkg = { .PackageGeneration = 0 }; //Zero-initialized
+	
+	if (getuid() != 0)
+	{
+		fputs("You must be root to manage or view system package settings.\n", stderr);
+		exit(1);
+	}
 	
 	///Master "mode" of operation
 	if (!strcmp(argv[1], "createpkg"))

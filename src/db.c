@@ -498,20 +498,19 @@ bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot)
 	snprintf(Path, sizeof Path, "%s/filelist.txt", InInfoDir);
 
 	
-	struct FileAttributes Attributes = Files_GetDefaultAttributes();
 	
 	//We overwrite an earlier version.
-	if (!Files_FileCopy(Path, "filelist.txt", &Attributes, true)) return false;
+	if (!Files_FileCopy(Path, "filelist.txt", true)) return false;
 	
 	///Metadata
 	snprintf(Path, sizeof Path, "%s/metadata.txt", InInfoDir);
 	
-	if (!Files_FileCopy(Path, "metadata.txt", &Attributes, true)) return false;
+	if (!Files_FileCopy(Path, "metadata.txt", true)) return false;
 	
 	///Checksums
 	snprintf(Path, sizeof Path, "%s/checksums.txt", InInfoDir);
 	
-	if (!Files_FileCopy(Path, "checksums.txt", &Attributes, true)) return false;
+	if (!Files_FileCopy(Path, "checksums.txt", true)) return false;
 	
 	return true;
 }

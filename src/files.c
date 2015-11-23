@@ -24,24 +24,6 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <pwd.h>
 #include "substrings/substrings.h"
 #include "packrat.h"
-
-struct FileAttributes Files_GetDefaultAttributes(void)
-{
-	struct FileAttributes Attributes = { .Mode = 0644, .User = "root" };
-	
-	struct group *Group = getgrgid(0);
-	
-	if (!Group)
-	{
-		SubStrings.Copy(Attributes.Group, "root", sizeof Attributes.Group);
-		return Attributes;
-	}
-
-	SubStrings.Copy(Attributes.Group, Group->gr_name, sizeof Attributes.Group);
-	
-	return Attributes;
-}
-	
 	
 bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut)
 {
@@ -55,7 +37,7 @@ bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group
 	return true;
 }
 
-bool Files_Mkdir(const char *Source, const char *Destination, struct FileAttributes *Attributes)
+bool Files_Mkdir(const char *Source, const char *Destination)
 { //There will be no overwrite option for this one. The directory is probably not empty.
 	struct stat DirStat;
 	
@@ -63,32 +45,24 @@ bool Files_Mkdir(const char *Source, const char *Destination, struct FileAttribu
 	if (stat(Source, &DirStat) != 0) return false;
 	
 	struct stat Temp;
-	uid_t UID;
-	gid_t GID;
-	
 	//Destination already exists.
 	if (stat(Destination, &Temp) == 0)
 	{
 		//Change permissions to reflect the new version
-		chmod(Destination, Attributes->Mode);
-		
-		if (!Files_TextUserAndGroupToIDs(Attributes->User, Attributes->Group, &UID, &GID)) return false;
-		
-		chown(Destination, UID, GID);
+		chown(Destination, DirStat.st_uid, DirStat.st_gid);
+		chmod(Destination, DirStat.st_mode);
 		return false; //I wish I could pass NULL to stat for the second argument. Sometimes I just want to know it exists.
 	}
 	
 	
 	if (mkdir(Destination, DirStat.st_mode) != 0) return false;
-	
-	if (!Files_TextUserAndGroupToIDs(Attributes->User, Attributes->Group, &UID, &GID)) return false;
 		
-	chown(Destination, UID, GID);
-	
+	chown(Destination, DirStat.st_uid, DirStat.st_gid);
+	chmod(Destination, DirStat.st_mode);
 	return true;
 }
 
-bool Files_SymlinkCopy(const char *Source, const char *Destination, struct FileAttributes *Attributes, bool Overwrite)
+bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite)
 {
 	struct stat LinkStat;
 	
@@ -128,22 +102,13 @@ bool Files_SymlinkCopy(const char *Source, const char *Destination, struct FileA
 	{
 		return false;
 	}
-	uid_t UID;
-	gid_t GID;
-	
-	if (!Files_TextUserAndGroupToIDs(Attributes->User, Attributes->Group, &UID, &GID))
-	{
-		unlink(Destination);
-		return false;
-	}
-	
 	//Restore the owner that the original had.
-	lchown(Destination, UID, GID);
+	lchown(Destination, Temp.st_uid, Temp.st_gid);
 	
 	return true;
 }
 
-bool Files_FileCopy(const char *Source, const char *Destination, struct FileAttributes *Attributes, bool Overwrite)
+bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite)
 { //Copies a file preserving its permissions.
 	FILE *In = fopen(Source, "rb");
 
@@ -196,17 +161,8 @@ bool Files_FileCopy(const char *Source, const char *Destination, struct FileAttr
 	fclose(In);
 	fclose(Out);
 	
-	//Now we reset the permissions on the destination to match the source.
-	
-	uid_t UID;
-	gid_t GID;
-	
-	if (!Files_TextUserAndGroupToIDs(Attributes->User, Attributes->Group, &UID, &GID))
-	{
-		return false;
-	}
-	
-	chown(Destination, UID, GID); //not using lchmod because we already deleted any symlink that was there before.
-	chmod(Destination, Attributes->Mode);
+	//Now we reset the permissions on the destination to match the source.	
+	chown(Destination, FileStat.st_uid, FileStat.st_gid); //not using lchmod because we already deleted any symlink that was there before.
+	chmod(Destination, FileStat.st_mode);
 	return true;
 }

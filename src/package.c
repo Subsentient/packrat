@@ -76,7 +76,7 @@ bool Package_ExtractPackage(const char *AbsolutePathToPkg, const char *const Sys
 			_exit(1);
 		}
 		
-		execlp("tar", "tar", "xfp", AbsolutePathToPkg, NULL); //This had better be an absolute path.
+		execlp("mount", "mount", "-t", "squashfs", "-o", "ro", AbsolutePathToPkg, DirPath, NULL); //This had better be an absolute path.
 		
 		_exit(1);
 	}
@@ -247,8 +247,8 @@ static bool Package_CompressPackage(const char *PackageTempDir)
 		unlink(PackageName); //Delete the old if it exists.
 
 		chdir(PackageTempDir);
-
-		execlp("tar", "tar", "cJfp", PackageName, ".", NULL);
+		
+		execlp("mksquashfs", "mksquashfs", ".", PackageName, NULL);
 		_exit(1);
 	}
 	
@@ -331,29 +331,15 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
 	{
 		const char *LineData = CurLine + 2; //Plus the 'd ' or 'f '
-		char ModeText[64];
-		uid_t UID;
-		gid_t GID;
-		
-		const char *Jump = LineData;
-		
-		SubStrings.CopyUntilC(ModeText, sizeof ModeText, &Jump, " ", true);
-		
-		struct FileAttributes Attributes;
-		Attributes.Mode = strtol(ModeText, NULL, 8);
-		SubStrings.CopyUntilC(Attributes.User, sizeof Attributes.User, &Jump, ":", true);
-		SubStrings.CopyUntilC(Attributes.Group, sizeof Attributes.Group, &Jump, " ", true);
-		
-		if (!Files_TextUserAndGroupToIDs(Attributes.User, Attributes.Group, &UID, &GID)) return false;
-		
-		const char *const ActualPath = Jump;
+
+		const char *const ActualPath = LineData;
 		
 		snprintf(Path1, sizeof Path1, "%s/files/%s", PackageDir, ActualPath);
 		snprintf(Path2, sizeof Path2, "%s/%s", Sysroot, ActualPath);
 		
 		if (*CurLine == 'd')
 		{
-			Files_Mkdir(Path1, Path2, &Attributes); //We don't care much if this fails, it updates the mode if the directory exists.
+			Files_Mkdir(Path1, Path2); //We don't care much if this fails, it updates the mode if the directory exists.
 		}
 		else if (*CurLine == 'f')
 		{
@@ -364,11 +350,11 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 			
 			if (S_ISLNK(FileStat.st_mode))
 			{
-				if (!Files_SymlinkCopy(Path1, Path2, &Attributes, true)) return false;
+				if (!Files_SymlinkCopy(Path1, Path2, true)) return false;
 			}
 			else
 			{
-				if (!Files_FileCopy(Path1, Path2, &Attributes, true)) return false;
+				if (!Files_FileCopy(Path1, Path2, true)) return false;
 			}
 
 		}
@@ -386,12 +372,6 @@ bool Package_UninstallFiles(const char *Sysroot, const char *FileListBuf)
 	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
 	{
 		const char *LineData = CurLine + 2;
-		
-		
-		//Twice, to get to the file path.
-		LineData = SubStrings.Line.WhitespaceJump(LineData);
-		LineData = SubStrings.Line.WhitespaceJump(LineData);
-		
 		
 		switch (*CurLine)
 		{
@@ -446,28 +426,7 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 	
 	while (SubStrings.Line.GetLine(Line, sizeof Line, &Iter))
 	{
-		const char *LineData = Line + 2;
-		
-		char ModeText[64];
-		uid_t UID;
-		gid_t GID;
-		
-		const char *Jump = LineData;
-		
-		SubStrings.CopyUntilC(ModeText, sizeof ModeText, &Jump, " ", true);
-		
-		struct FileAttributes Attributes;
-		Attributes.Mode = strtol(ModeText, NULL, 8);
-		SubStrings.CopyUntilC(Attributes.User, sizeof Attributes.User, &Jump, ":", true);
-		SubStrings.CopyUntilC(Attributes.Group, sizeof Attributes.Group, &Jump, " ", true);
-
-		if (!Files_TextUserAndGroupToIDs(Attributes.User, Attributes.Group, &UID, &GID))
-		{
-			free(Buffer);
-			puts("Ownership failure");
-			return false;
-		}
-		const char *const ActualPath = Jump;
+		const char *ActualPath = Line + 2;
 		
 		//Incoming path.
 		snprintf(Path1, sizeof Path1, "%s/%s", InputDir, ActualPath);
@@ -476,7 +435,7 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 		
 		if (*Line == 'd')
 		{
-			Files_Mkdir(Path1, Path2, &Attributes);
+			Files_Mkdir(Path1, Path2);
 		}
 		else if (*Line == 'f')
 		{
@@ -489,11 +448,11 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 			
 			if (S_ISLNK(FileStat.st_mode))
 			{
-				Files_SymlinkCopy(Path1, Path2, &Attributes, false);
+				Files_SymlinkCopy(Path1, Path2, false);
 			}
 			else
 			{
-				Files_FileCopy(Path1, Path2, &Attributes, false);
+				Files_FileCopy(Path1, Path2, false);
 			}
 		}
 	}
@@ -531,13 +490,11 @@ static bool Package_MakeAllChecksums(const char *Directory, const char *FileList
 		if (*LineBuf == 'd') continue; //We don't deal with directories.
 		
 		const char *LineData = LineBuf + (sizeof "f " - 1);
-		
-		//Jump past permissions
-		LineData = SubStrings.Line.WhitespaceJump(LineData);
-		//Jump past user/group
-		LineData = SubStrings.Line.WhitespaceJump(LineData);
-		
+
 		snprintf(PathBuf, sizeof PathBuf, "%s/%s", Directory, LineData);
+		
+		struct stat TempStat;
+		if (lstat(PathBuf, &TempStat) != 0 || S_ISLNK(TempStat.st_mode)) continue;
 		
 		//Build the checksum.
 		if (!Package_MakeFileChecksum(PathBuf, Checksum, sizeof Checksum))
@@ -711,13 +668,11 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		{
 			continue;
 		}
-	
-		struct passwd *FileUser = getpwuid(FileStat.st_gid);
-		struct group *FileGroup = getgrgid(FileStat.st_gid);
+
 		if (S_ISDIR(FileStat.st_mode))
 		{ //It's a directory.
 			
-			snprintf(OutStream, sizeof OutStream, "d %o %s:%s %s\n", FileStat.st_mode, FileUser->pw_name, FileGroup->gr_name, NewPath);
+			snprintf(OutStream, sizeof OutStream, "d %s\n", NewPath);
 			fwrite(OutStream, 1, strlen(OutStream), OutDesc); //Write the directory name.
 			
 			//Now we recurse and call the same function to process the subdir.
@@ -737,7 +692,7 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		}
 		//It's a file.
 		
-		snprintf(OutStream, sizeof OutStream, "f %o %s:%s %s\n", FileStat.st_mode, FileUser->pw_name, FileGroup->gr_name, NewPath);
+		snprintf(OutStream, sizeof OutStream, "f %s\n", NewPath);
 		fwrite(OutStream, 1, strlen(OutStream), OutDesc); 
 		
 	}

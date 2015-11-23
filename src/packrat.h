@@ -54,13 +54,6 @@ struct PackageList
 
 };
 
-struct FileAttributes
-{
-	mode_t Mode;
-	char User[256];
-	char Group[256];
-};
-
 //Functions
 
 //action.c
@@ -83,9 +76,9 @@ bool Package_CreatePackage(const struct Package *Job, const char *Directory);
 bool Package_VerifyChecksums(const char *PackageDir);
 
 //files.c
-bool Files_FileCopy(const char *Source, const char *Destination, struct FileAttributes *Attributes, bool Overwrite);
-bool Files_Mkdir(const char *Source, const char *Destination, struct FileAttributes *Attributes);
-bool Files_SymlinkCopy(const char *Source, const char *Destination, struct FileAttributes *Attributes, bool Overwrite);
+bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite);
+bool Files_Mkdir(const char *Source, const char *Destination);
+bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite);
 bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut);
 struct FileAttributes Files_GetDefaultAttributes(void);
 

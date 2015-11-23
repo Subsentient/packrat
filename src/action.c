@@ -57,10 +57,12 @@ static bool Action_ExecutePkgCmd(const char *Command, const char *Sysroot)
 static void Action_DeleteTempDir(const char *Path)
 {
 	puts("Cleaning up...");
-	char CmdBuf[4096] = "rm -rf ";
+	char CmdBuf[2][4096] = {  "rm -rf ", "umount " };
 	
-	SubStrings.Cat(CmdBuf, Path, sizeof CmdBuf);
-	system(CmdBuf);
+	SubStrings.Cat(CmdBuf[0], Path, sizeof CmdBuf);
+	SubStrings.Cat(CmdBuf[1], Path, sizeof CmdBuf);
+	system(CmdBuf[1]);
+	system(CmdBuf[0]);
 }
 
 bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot)
