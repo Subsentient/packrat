@@ -156,20 +156,38 @@ int main(int argc, char **argv)
 	{
 		case OP_CREATE:
 		{
-			Package_CreatePackage(&Pkg, CreationDirectory);
-			exit(0);
-			break;
+			if (!*Pkg.PackageID || !*Pkg.Arch || !*Pkg.VersionString || !*CreationDirectory)
+			{
+				fputs("Missing arguments. Need package ID, architecture, version string, and creation directory.\n", stderr);
+				return 1;
+			}
+			return !Package_CreatePackage(&Pkg, CreationDirectory);
 		}
 		case OP_INSTALL:
 		{
+			if (!*InFile)
+			{
+				fputs("Missing arguments. Need absolute path to package file to install with \"--file=\".\n", stderr);
+				return 1;
+			}
 			return !Action_InstallPackage(InFile, Sysroot);
 		}
 		case OP_REMOVE:
 		{
+			if (!*Pkg.PackageID)
+			{
+				fputs("Missing arguments. Need at least a package ID, optionally an architecture.\n", stderr);
+				return 1;
+			}
 			return !Action_UninstallPackage(Pkg.PackageID, *Pkg.Arch ? Pkg.Arch : NULL, Sysroot);
 		}
 		case OP_UPDATE:
 		{
+			if (!*InFile)
+			{
+				fputs("Missing arguments. Need absolute path to package file to use as update with \"--file=\".\n", stderr);
+				return 1;
+			}
 			return !Action_UpdatePackage(InFile, Sysroot);
 		}
 		default:
