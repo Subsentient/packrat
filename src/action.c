@@ -75,20 +75,42 @@ bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
-	if (!Package_ExtractPackage(PkgPath, Sysroot, Path, sizeof Path))
+	puts("Reading database...");
+	if (!DB_Disk_LoadDB(Sysroot))
 	{
+		fprintf(stderr, "Unable to load packrat database.\n");
 		return false;
 	}
 	
-	if (chdir(Path) != 0 || chdir("info") != 0) return false;
+	puts("Extracting package...");
+	if (!Package_ExtractPackage(PkgPath, Sysroot, Path, sizeof Path))
+	{
+		fputs("ERROR: Failed to extract package to temporary directory!\n", stderr);
+		DB_Shutdown();
+		
+		return false;
+	}
+	
+	char InfoPath[4096];
+	
+	snprintf(InfoPath, sizeof InfoPath, "%s/info/", Path);
 	
 	struct Package Pkg;
 	
-	if (!DB_Disk_GetMetadata(NULL, &Pkg)) return false;
+	puts("Reading package information...");
+	if (!DB_Disk_GetMetadata(InfoPath, &Pkg))
+	{
+		fputs("ERROR: Failed to read package metadata!\n", stderr);
+		DB_Shutdown();
+		Action_DeleteTempDir(Path);
+		return false;
+	}
 	
 	if (!Config_ArchPresent(Pkg.Arch))
 	{ //While not explicitly needed for the update operation, it gives the user some useful info.
 		fprintf(stderr, "Package's architecture %s not supported on this system.\n", Pkg.Arch);
+		DB_Shutdown();
+		Action_DeleteTempDir(Path);
 		return false;
 	}
 	
@@ -97,11 +119,91 @@ bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot)
 	if (!OldPackage)
 	{
 		fprintf(stderr, "Package %s.%s is not installed, so can't update it.\n", Pkg.PackageID, Pkg.Arch);
+		DB_Shutdown();
+		Action_DeleteTempDir(Path);
 		return false;
 	}
 	
+	if (SubStrings.Compare(OldPackage->Pkg.VersionString, Pkg.VersionString) && OldPackage->Pkg.PackageGeneration == Pkg.PackageGeneration)
+	{
+		fputs("This version of the package is already installed.\n", stderr);
+		DB_Shutdown();
+		Action_DeleteTempDir(Path);
+		return false;
+	}
 	
-
+	puts("Verifying file checksums...");
+	//Verify checksums.
+	if (!Package_VerifyChecksums(Path))
+	{
+		fprintf(stderr, "%s_%s-%u.%s: Package file checksum failure; package may be damaged.\n",
+				Pkg.PackageID, Pkg.VersionString, Pkg.PackageGeneration, Pkg.Arch);
+		DB_Shutdown();
+		Action_DeleteTempDir(Path);
+		return false;
+	}
+	
+	//Update files
+	const char *OldFileList = DB_Disk_GetFileList(OldPackage->Pkg.PackageID, OldPackage->Pkg.Arch, Sysroot);
+	const char *NewFileList = DB_Disk_GetFileListDyn(InfoPath);
+	
+	if (!OldFileList || !NewFileList)
+	{
+		fputs("ERROR: Unable to compare file lists between old and new packages.\n", stderr);
+		DB_Shutdown();
+		if (OldFileList) free((void*)OldFileList);
+		else if (NewFileList) free((void*)NewFileList);
+		Action_DeleteTempDir(Path);
+		return false;
+	}
+	
+	if (*Pkg.Cmds.PreUpdate)
+	{
+		fputs("Executing pre-update commands...\n", stdout);
+		if (!Action_ExecutePkgCmd(Pkg.Cmds.PreUpdate, Sysroot))
+		{
+			fputs("WARNING: Failure exexuting pre-update commands.\n", stderr);
+		}
+	}
+	
+	puts("Updating files...");
+	if (!Package_UpdateFiles(Path, Sysroot, OldFileList, NewFileList))
+	{
+		fputs("ERROR: File update failed.\n", stderr);
+		free((void*)OldFileList);
+		free((void*)NewFileList);
+		DB_Shutdown();
+		Action_DeleteTempDir(Path);
+		return false;
+	}
+	
+	free((void*)OldFileList);
+	free((void*)NewFileList);
+	
+	if (*Pkg.Cmds.PostUpdate)
+	{
+		fputs("Executing post-update commands...\n", stdout);
+		if (!Action_ExecutePkgCmd(Pkg.Cmds.PostUpdate, Sysroot))
+		{
+			fputs("WARNING: Failure exexuting post-update commands.\n", stderr);
+		}
+	}
+	
+	puts("Updating database...");
+	OldPackage->Pkg = Pkg;
+	if (!DB_Disk_SavePackage(InfoPath, Sysroot))
+	{
+		fputs("CRITICAL ERROR: Failed to save package database information!\n", stderr);
+		DB_Shutdown();
+		Action_DeleteTempDir(Path);
+	}
+	
+	//Delete temporary directory
+	Action_DeleteTempDir(Path);
+	
+	printf("Package %s.%s updated to \"%s_%s-%u.%s\"\n", Pkg.PackageID, Pkg.Arch, Pkg.PackageID, Pkg.VersionString, Pkg.PackageGeneration, Pkg.Arch);
+	
+	DB_Shutdown();
 	return true;
 }
 
@@ -138,9 +240,7 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	
 	snprintf(InfoDirPath, sizeof InfoDirPath, "%s/info", Path);
 	
-	
-	
-	struct Package Pkg = { .PackageGeneration = 0 }; //Zero initialized.
+	struct Package Pkg = { .PackageGeneration = 0 }; //Zero initialize the entire blob.
 	
 	puts("Reading package information...");
 	
@@ -148,6 +248,7 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	if (!DB_Disk_GetMetadata(InfoDirPath, &Pkg))
 	{
 		fputs("ERROR: Failed to read package metadata!\n", stderr);
+		DB_Shutdown();
 		Action_DeleteTempDir(Path);
 		return false;
 	}
@@ -205,6 +306,7 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 		fputs("ERROR: Failed to install files! Aborting installation.\n", stderr);
 		DB_Shutdown();
 		Action_DeleteTempDir(Path);
+		free((void*)Filelist);
 		return false;
 	}
 	free((void*)Filelist);

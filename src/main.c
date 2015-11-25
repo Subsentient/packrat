@@ -44,7 +44,8 @@ int main(int argc, char **argv)
 	
 	if (getuid() != 0)
 	{
-		fputs("You must be root to manage or view system package settings.\n", stderr);
+		fputs("You must be root to manage or view system package settings.\n"
+			"root is also required to create packages, in order to preserve full permissions.\n", stderr);
 		exit(1);
 	}
 	
@@ -166,6 +167,10 @@ int main(int argc, char **argv)
 		case OP_REMOVE:
 		{
 			return !Action_UninstallPackage(Pkg.PackageID, *Pkg.Arch ? Pkg.Arch : NULL, Sysroot);
+		}
+		case OP_UPDATE:
+		{
+			return !Action_UpdatePackage(InFile, Sysroot);
 		}
 		default:
 			break;

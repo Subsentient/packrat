@@ -321,6 +321,48 @@ bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath)
 	return true;
 }
 
+ 
+bool Package_UpdateFiles(const char *PackageDir, const char *Sysroot, const char *OldFileListBuf, const char *NewFileListBuf)
+{ //Deletes files that no longer exist in the newer version of the package, and then overwrites the remaining with new data.
+	if (!OldFileListBuf || !NewFileListBuf) return false;
+	
+	//First thing is write the new versions of the files.
+	
+	if (!Package_InstallFiles(PackageDir, Sysroot, NewFileListBuf))
+	{
+		return false;
+	}
+	
+	
+	//Next we compare the old and new, and delete what was present in the old, but NOT the new.
+	char NewLine[4096], OldLine[4096];
+	
+	const char *Iter1 = OldFileListBuf, *Iter2 = NULL;
+	
+	while (SubStrings.Line.GetLine(OldLine, sizeof OldLine, &Iter1))
+	{ ///This is almost certainly really expensive, but I'll be damned if I'm going to use a linked list or something for *just this*.
+		if (*OldLine == 'd') continue; //Don't do anything to directories.
+		
+		for (Iter2 = NewFileListBuf;
+			SubStrings.Line.GetLine(NewLine, sizeof NewLine, &Iter2);)
+		{
+			if (*NewLine == 'd') continue;
+
+			if (!strcmp(OldLine + (sizeof "f " - 1), NewLine + (sizeof "f " - 1))) goto SkipDelete;
+		}
+		
+		//Delete obsolete file
+		char TmpBuf[4096];
+		snprintf(TmpBuf, sizeof TmpBuf, "%s/%s", Sysroot, OldLine + (sizeof "f " - 1));
+		unlink(TmpBuf);
+		
+	SkipDelete:
+		continue;
+	}
+	return true;
+
+}
+
 bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf)
 {
 	char CurLine[4096];

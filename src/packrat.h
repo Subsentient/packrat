@@ -70,6 +70,7 @@ bool Package_ExtractPackage(const char *AbsolutePathToPkg, const char *const Sys
 bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
 bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize);
 bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf);
+bool Package_UpdateFiles(const char *PackageDir, const char *Sysroot, const char *OldFileListBuf, const char *NewFileListBuf);
 bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath);
 bool Package_UninstallFiles(const char *Sysroot, const char *FileListBuf);
 bool Package_CreatePackage(const struct Package *Job, const char *Directory);
