@@ -124,7 +124,8 @@ bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
-	if (SubStrings.Compare(OldPackage->Pkg.VersionString, Pkg.VersionString) && OldPackage->Pkg.PackageGeneration == Pkg.PackageGeneration)
+	if (SubStrings.Compare(OldPackage->Pkg.VersionString, Pkg.VersionString) &&
+		OldPackage->Pkg.PackageGeneration == Pkg.PackageGeneration)
 	{
 		fputs("This version of the package is already installed.\n", stderr);
 		DB_Shutdown();

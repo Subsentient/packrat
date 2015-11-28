@@ -92,6 +92,19 @@ int main(int argc, char **argv)
 		else if (SubStrings.StartsWith("--sysroot=", argv[Inc]))
 		{
 			SubStrings.Extract(Sysroot, sizeof Sysroot, "=", NULL, argv[Inc]);
+			
+			//Convert to absolute path.
+			if (*Sysroot != '/')
+			{ //Convert to absolute path.
+				char TmpDir[sizeof Sysroot];
+				
+				getcwd(TmpDir, sizeof TmpDir);
+				
+				SubStrings.Cat(TmpDir, "/", sizeof TmpDir);
+				SubStrings.Cat(TmpDir, Sysroot, sizeof TmpDir);
+				
+				SubStrings.Copy(Sysroot, TmpDir, sizeof Sysroot);
+			}
 		}
 		else if (SubStrings.StartsWith("--file=", argv[Inc]))
 		{
@@ -161,6 +174,18 @@ int main(int argc, char **argv)
 				fputs("Missing arguments. Need package ID, architecture, version string, and creation directory.\n", stderr);
 				return 1;
 			}
+			
+			if (*CreationDirectory != '/')
+			{ //Convert to absolute path.
+				char TmpDir[sizeof CreationDirectory];
+				
+				getcwd(TmpDir, sizeof TmpDir);
+				
+				SubStrings.Cat(TmpDir, "/", sizeof TmpDir);
+				SubStrings.Cat(TmpDir, CreationDirectory, sizeof TmpDir);
+				
+				SubStrings.Copy(CreationDirectory, TmpDir, sizeof InFile);
+			}
 			return !Package_CreatePackage(&Pkg, CreationDirectory);
 		}
 		case OP_INSTALL:
@@ -170,6 +195,19 @@ int main(int argc, char **argv)
 				fputs("Missing arguments. Need absolute path to package file to install with \"--file=\".\n", stderr);
 				return 1;
 			}
+			
+			if (*InFile != '/')
+			{ //Convert to absolute path.
+				char TmpFile[sizeof InFile];
+				
+				getcwd(TmpFile, sizeof TmpFile);
+				
+				SubStrings.Cat(TmpFile, "/", sizeof TmpFile);
+				SubStrings.Cat(TmpFile, InFile, sizeof TmpFile);
+				
+				SubStrings.Copy(InFile, TmpFile, sizeof InFile);
+			}
+			
 			return !Action_InstallPackage(InFile, Sysroot);
 		}
 		case OP_REMOVE:
@@ -187,6 +225,18 @@ int main(int argc, char **argv)
 			{
 				fputs("Missing arguments. Need absolute path to package file to use as update with \"--file=\".\n", stderr);
 				return 1;
+			}
+			
+			if (*InFile != '/')
+			{ //Convert to absolute path.
+				char TmpFile[sizeof InFile];
+				
+				getcwd(TmpFile, sizeof TmpFile);
+				
+				SubStrings.Cat(TmpFile, "/", sizeof TmpFile);
+				SubStrings.Cat(TmpFile, InFile, sizeof TmpFile);
+				
+				SubStrings.Copy(InFile, TmpFile, sizeof InFile);
 			}
 			return !Action_UpdatePackage(InFile, Sysroot);
 		}
