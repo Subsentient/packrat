@@ -357,8 +357,14 @@ bool Action_UninstallPackage(const char *PackageID, const char *Arch, const char
 	//Load the database.
 	if (!DB_Disk_LoadDB(Sysroot))
 	{
-		fprintf(stderr, "Failed to load packrat database. It could be missing or corrupted.");
+		fprintf(stderr, "Failed to load packrat database. It could be missing or corrupted.\n");
 		return false;
+	}
+	
+	if (!Arch && DB_HasMultiArches(PackageID))
+	{
+		fprintf(stderr, "Package %s has multiple architectures installed. You must specify an architecture.\n", PackageID);
+		DB_Shutdown();
 	}
 	
 	//Search for the package.

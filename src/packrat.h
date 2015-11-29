@@ -95,6 +95,7 @@ void DB_Shutdown(void);
 bool DB_Disk_DeletePackage(const char *PackageID, const char *Arch, const char *Sysroot);
 bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot);
 struct PackageList *DB_Lookup(const char *PackageID, const char *Arch);
+bool DB_HasMultiArches(const char *PackageID);
 
 //Globals
 extern char SupportedArch[8][64];

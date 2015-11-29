@@ -62,6 +62,44 @@ struct PackageList *DB_Lookup(const char *PackageID, const char *Arch)
 	return NULL;
 }
 
+bool DB_HasMultiArches(const char *PackageID)
+{ //Checks if there are two of the same package, assumedly with different architectures.
+	struct PackageList **List = DB_GetListByAlpha(*PackageID);
+	
+	if (!*List) return false;
+	
+	
+	struct PackageList *Found = NULL, *Worker = *List;
+	
+	for (; Worker; Worker = Worker->Next)
+	{
+		if (!strcmp(PackageID, Worker->Pkg.PackageID))
+		{
+			Found = Worker;
+			break;
+		}
+	}
+	
+	if (!Found) return false;
+	
+	for (Worker = Found->Next; Worker; Worker = Worker->Next)
+	{
+		if (!strcmp(PackageID, Worker->Pkg.PackageID))
+		{
+			//Something's fucky, shouldn't have two of the same arch.
+			if (!strcmp(Found->Pkg.Arch, Worker->Pkg.Arch))
+			{
+				return false;
+			}
+			
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+
 //Function definitions
 struct PackageList *DB_Add(const struct Package *Pkg)
 {
