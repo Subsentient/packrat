@@ -65,6 +65,148 @@ static void Action_DeleteTempDir(const char *Path)
 	system(CmdBuf[0]);
 }
 
+bool Action_CreateTempCacheDir(char *OutBuf, const unsigned OutBufSize, const char *Sysroot)
+{
+	//Build some random numbers to use as part of the temp directory name.
+	unsigned DirNum1 = rand();
+	unsigned DirNum2 = rand();
+	unsigned DirNum3 = rand();
+	
+	snprintf(OutBuf, OutBufSize, "%s/var/packrat/cache/packrat_cache_%u.%u.%u", Sysroot, DirNum1, DirNum2, DirNum3);
+	
+	//Now create the directory.
+	if (mkdir(OutBuf, 0700) != 0)
+	{
+		fputs("Failed to create temporary directory!\n", stderr);
+		return false;
+	}
+	
+	return true;
+}
+
+bool Action_ReverseInstall(const char *PackageID, const char *Arch, const char *Sysroot)
+{ //Turns files from an installation into a package.
+	if (!Config_LoadConfig(Sysroot))
+	{
+		fputs("Failed to load packrat configuration.\n", stderr);
+		return false;
+	}
+	
+	puts("Reading database...");
+	if (!DB_Disk_LoadDB(Sysroot))
+	{
+		fputs("Unable to load packrat database.\n", stderr);
+		return false;
+	}
+	
+	struct PackageList *Lookup = DB_Lookup(PackageID, Arch);
+	
+	if (!Lookup)
+	{
+		fprintf(stderr, "Package %s.%s is not installed. A reverse installation requires a package to be installed.\n", PackageID, Arch);
+		DB_Shutdown();
+		return false;
+	}
+	
+	const char *FileListBuf = DB_Disk_GetFileList(PackageID, Arch, Sysroot);
+	
+	if (!FileListBuf)
+	{
+		fputs("Unable to open file list for scanning!\n", stderr);
+		DB_Shutdown();
+		return false;
+	}
+	
+	char TempDir[4096];
+	if (!Action_CreateTempCacheDir(TempDir, sizeof TempDir, Sysroot))
+	{
+		fputs("Failed to create temporary cache directory!\n", stderr);
+		free((void*)FileListBuf);
+		DB_Shutdown();
+		return false;
+	}
+	
+	//Create the necessary subdirectories.
+	char *Nurble[2] = { malloc(4096), malloc(4096) }; //Nurble nurble, flesh eating gerbils, peanut butter going burble... go out and munch yourselves some bad guys!
+	
+	SubStrings.Copy(Nurble[0], TempDir, 4096);
+	SubStrings.Cat(Nurble[0], "/files", 4096);
+	
+	SubStrings.Copy(Nurble[1], TempDir, 4096);
+	SubStrings.Cat(Nurble[1], "/info", 4096);
+
+	if (mkdir(Nurble[0], 0755) != 0 && mkdir(Nurble[1], 0755) != 0)
+	{
+		fputs("Failed to create subdirectories of cache directory!\n", stderr);
+		free((void*)FileListBuf);
+		DB_Shutdown();
+		Action_DeleteTempDir(TempDir);
+		free(Nurble[0]);
+		free(Nurble[1]);
+		return false;
+	}
+	
+	//In this way, we copy files from the sysroot BEFORE verifying them.
+	if (!Package_ReverseInstallFiles(TempDir, Sysroot, FileListBuf))
+	{
+		fputs("Failed to reverse install files.\n", stderr);
+		free((void*)FileListBuf);
+		DB_Shutdown();
+		Action_DeleteTempDir(TempDir);
+		free(Nurble[0]);
+		free(Nurble[1]);
+		return false;
+	}
+	
+	
+	//Verify acquired reverse installation file checksums.
+	if (!Package_VerifyChecksums(TempDir))
+	{
+		fputs("Checksums for acquired reverse-installation files do not match. Cannot continue.\n", stderr);
+		free((void*)FileListBuf);
+		DB_Shutdown();
+		Action_DeleteTempDir(TempDir);
+		free(Nurble[0]);
+		free(Nurble[1]);
+		return false;
+	
+	}
+	
+	//Copy metadata.
+	if (!Package_SaveMetadata(&Lookup->Pkg, Nurble[1]))
+	{
+		fputs("Failed to store package metadata for reverse installation. Cannot continue.\n", stderr);
+		free((void*)FileListBuf);
+		DB_Shutdown();
+		Action_DeleteTempDir(TempDir);
+		free(Nurble[0]);
+		free(Nurble[1]);
+		return false;
+	}
+	
+	//Build the package
+	char OutFile[4096];
+	getcwd(OutFile, sizeof OutFile);
+	SubStrings.Cat(OutFile, "/", sizeof OutFile);
+	char *ToOut = OutFile + SubStrings.Length(OutFile);
+	
+	snprintf(ToOut, sizeof OutFile - SubStrings.Length(OutFile), "%s_%s-%u.%s.reverseinstall.pkrt",
+			Lookup->Pkg.PackageID, Lookup->Pkg.VersionString, Lookup->Pkg.PackageGeneration, Lookup->Pkg.Arch);
+	
+	if (!Package_CompressPackage(TempDir, OutFile))
+	{
+		fputs("Failed to compress package generated via reverse installation.\n", stderr);
+		free((void*)FileListBuf);
+		DB_Shutdown();
+		Action_DeleteTempDir(TempDir);
+		free(Nurble[0]);
+		free(Nurble[1]);
+	}
+	
+	return true;
+	
+}
+
 bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot)
 {
 	char Path[4096];
@@ -298,6 +440,14 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	
 	//We need a file list.
 	const char *Filelist = DB_Disk_GetFileListDyn(InfoDirPath);
+	
+	if (!Filelist)
+	{
+		fputs("Unable to open file list for scanning!\n", stderr);
+		DB_Shutdown();
+		Action_DeleteTempDir(Path);
+		return false;
+	}
 	
 	puts("Installing files...");
 	

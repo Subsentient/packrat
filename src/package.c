@@ -35,26 +35,11 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath);
 static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc);
 static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList);
-static bool Package_CompressPackage(const char *PackageTempDir);
-
+	
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize)
 {	
-	//Build some random numbers to use as part of the temp directory name.
-	unsigned DirNum1 = rand();
-	unsigned DirNum2 = rand();
-	unsigned DirNum3 = rand();
-	
-	char DirPath[4096];
-	//Put the temp directory name together
-	snprintf(DirPath, sizeof DirPath, "%s/var/packrat/cache/packrat_pkg_%u.%u.%u", Sysroot, DirNum1, DirNum2, DirNum3);
-	
-	///Send the directory path back to the caller.
-	SubStrings.Copy(PkgDirPath, DirPath, PkgDirPathSize);
-	
-	//Now create the directory.
-	if (mkdir(DirPath, 0700) != 0)
+	if (!Action_CreateTempCacheDir(PkgDirPath, sizeof PkgDirPathSize, Sysroot))
 	{
-		fputs("Failed to create temporary directory!\n", stderr);
 		return false;
 	}
 	
@@ -71,12 +56,12 @@ bool Package_ExtractPackage(const char *AbsolutePathToPkg, const char *const Sys
 	{ //Execute the command.
 		setsid();
 		
-		if (chdir(DirPath) != 0)
+		if (chdir(PkgDirPath) != 0)
 		{ //Create and change to our directory.
 			_exit(1);
 		}
 		
-		execlp("mount", "mount", "-t", "squashfs", "-o", "ro", AbsolutePathToPkg, DirPath, NULL); //This had better be an absolute path.
+		execlp("mount", "mount", "-t", "squashfs", "-o", "ro", AbsolutePathToPkg, PkgDirPath, NULL); //This had better be an absolute path.
 		
 		_exit(1);
 	}
@@ -212,7 +197,7 @@ bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 	
 	puts("Creating .pkrt file...");
 	//Compress package.
-	if (!Package_CompressPackage(PackageFullName))
+	if (!Package_CompressPackage(PackageFullName, NULL))
 	{
 		fprintf(stderr, "Failed to create .pkrt package.\n");
 		return false;
@@ -231,11 +216,18 @@ bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 	
 }
 
-static bool Package_CompressPackage(const char *PackageTempDir)
+bool Package_CompressPackage(const char *PackageTempDir, const char *OutFile)
 {
 	char PackageName[4096];
 	
-	snprintf(PackageName, sizeof PackageName, "../%s.pkrt", PackageTempDir);
+	if (OutFile)
+	{
+		SubStrings.Copy(PackageName, OutFile, sizeof PackageName);
+	}
+	else
+	{
+		snprintf(PackageName, sizeof PackageName, "../%s.pkrt", PackageTempDir);
+	}
 	
 	pid_t PID = fork();
 		
@@ -245,7 +237,7 @@ static bool Package_CompressPackage(const char *PackageTempDir)
 	{ ///Child code
 		setsid();
 		unlink(PackageName); //Delete the old if it exists.
-
+		freopen("/dev/null", "a", stdout); //Shut the goddamn thing up
 		chdir(PackageTempDir);
 		
 		execlp("mksquashfs", "mksquashfs", ".", PackageName, NULL);
@@ -363,6 +355,45 @@ bool Package_UpdateFiles(const char *PackageDir, const char *Sysroot, const char
 
 }
 
+bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, const char *FileListBuf)
+{
+	char CurLine[4096];
+	const char *Iter = FileListBuf;
+	char Path1[4096], Path2[4096];
+	struct stat FileStat;
+	
+	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
+	{
+		const char *ActualPath = CurLine + 2; //Plus the 'd ' or 'f '
+		
+		snprintf(Path1, sizeof Path1, "%s/%s", Sysroot, ActualPath);
+		snprintf(Path2, sizeof Path2, "%s/files/%s", Destination, ActualPath);
+		
+		if (*CurLine == 'd')
+		{
+			Files_Mkdir(Path1, Path2); //We don't care much if this fails, it updates the mode if the directory exists.
+		}
+		else if (*CurLine == 'f')
+		{
+			if (lstat(Path1, &FileStat) != 0)
+			{
+				return false;
+			}
+			
+			if (S_ISLNK(FileStat.st_mode))
+			{
+				if (!Files_SymlinkCopy(Path1, Path2, true)) return false;
+			}
+			else
+			{
+				if (!Files_FileCopy(Path1, Path2, true)) return false;
+			}
+
+		}
+	}
+	return true;
+}
+
 bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf)
 {
 	char CurLine[4096];
@@ -372,9 +403,7 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 	
 	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
 	{
-		const char *LineData = CurLine + 2; //Plus the 'd ' or 'f '
-
-		const char *const ActualPath = LineData;
+		const char *ActualPath = CurLine + 2; //Plus the 'd ' or 'f '
 		
 		snprintf(Path1, sizeof Path1, "%s/files/%s", PackageDir, ActualPath);
 		snprintf(Path2, sizeof Path2, "%s/%s", Sysroot, ActualPath);
@@ -703,7 +732,6 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		
 		snprintf(AbsPath, sizeof AbsPath, "%s/%s", Directory,  File->d_name);
 		
-
 		SubStrings.Copy(NewPath, FullPath ? AbsPath : File->d_name, sizeof NewPath);
 
 		if (lstat(AbsPath, &FileStat) != 0)

@@ -84,7 +84,6 @@ int main(int argc, char **argv)
 	
 	for (; Inc < argc; ++Inc)
 	{
-		
 		if (SubStrings.StartsWith("--pkgid=", argv[Inc]))
 		{
 			SubStrings.Extract(Pkg.PackageID, sizeof Pkg.PackageID, "=", NULL,  argv[Inc]);

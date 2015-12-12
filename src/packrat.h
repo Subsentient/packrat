@@ -60,6 +60,7 @@ struct PackageList
 bool Action_InstallPackage(const char *PkgPath, const char *Sysroot);
 bool Action_UninstallPackage(const char *PackageID, const char *Arch, const char *Sysroot);
 bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot);
+bool Action_CreateTempCacheDir(char *OutBuf, const unsigned OutBufSize, const char *Sysroot);
 
 //config.c
 bool Config_ArchPresent(const char *CheckArch);
@@ -75,6 +76,8 @@ bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath);
 bool Package_UninstallFiles(const char *Sysroot, const char *FileListBuf);
 bool Package_CreatePackage(const struct Package *Job, const char *Directory);
 bool Package_VerifyChecksums(const char *PackageDir);
+bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, const char *FileListBuf);
+bool Package_CompressPackage(const char *PackageTempDir, const char *OutFile);
 
 //files.c
 bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite);
