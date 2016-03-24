@@ -71,7 +71,7 @@ bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwri
 	//Not a symlink.
 	if (!S_ISLNK(LinkStat.st_mode)) return false;
 	
-	char Target[4096] = { [sizeof Target - 1] = '\0' }; //Readlink doesn't null terminate
+	char Target[4096] = { '\0' }; //Readlink doesn't null terminate
 	
 	//Get the link target.
 	if (readlink(Source, Target, sizeof Target - 1) == -1) return false;
