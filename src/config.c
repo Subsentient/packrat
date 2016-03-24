@@ -1,4 +1,4 @@
-/*Packrat package manager, Copyright 2015 (C) Subsentient
+/*Packrat package manager, Copyright 2016 (C) Subsentient
 
 This file is part of Packrat.
 

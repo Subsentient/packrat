@@ -1,4 +1,4 @@
-/*Packrat package manager, Copyright 2015 (C) Subsentient
+/*Packrat package manager, Copyright 2016 (C) Subsentient
 
 This file is part of Packrat.
 
@@ -154,7 +154,7 @@ bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite)
 	do
 	{
 		AmountRead = fread(ReadBuf, 1, SizeToRead, In);
-		fwrite(ReadBuf, 1, AmountRead, Out);
+		if (AmountRead) fwrite(ReadBuf, 1, AmountRead, Out);
 	} while (AmountRead > 0);
 	free(ReadBuf);
 	
