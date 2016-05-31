@@ -203,6 +203,8 @@ bool Action_ReverseInstall(const char *PackageID, const char *Arch, const char *
 		free(Nurble[1]);
 	}
 	
+	free(Nurble[0]);
+	free(Nurble[1]);
 	return true;
 	
 }
