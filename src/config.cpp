@@ -25,11 +25,10 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 
 //Globals
-char SupportedArch[8][64];
+static std::set<PkString> SupportedArches;
 
 //Static function prototypes
 static bool Config_ProcessConfig(const char *ConfigStream);
-static bool Config_AddArch(const char *NewArch);
 
 //Actual functions
 bool Config_LoadConfig(const char *Sysroot)
@@ -48,7 +47,7 @@ bool Config_LoadConfig(const char *Sysroot)
 	
 	if (!Descriptor) return false;
 	
-	char *ConfigStream = calloc(FileStat.st_size + 1, 1);
+	char *ConfigStream = new char[FileStat.st_size + 1];
 	
 	fread(ConfigStream, 1, FileStat.st_size, Descriptor);
 	ConfigStream[FileStat.st_size] = '\0';
@@ -57,7 +56,7 @@ bool Config_LoadConfig(const char *Sysroot)
 	
 	Config_ProcessConfig(ConfigStream);
 	
-	free(ConfigStream);
+	delete[] ConfigStream;
 	return true;
 }
 
@@ -82,41 +81,15 @@ static bool Config_ProcessConfig(const char *const ConfigStream)
 		
 		if (!strcmp(LineID, "Arch"))
 		{
-			if (!Config_AddArch(LineData))
-			{
-				fprintf(stderr, "No room for new arch %s\n", LineData);
-				return false;
-			}
+			SupportedArches.insert(LineData);
 		}
 	}
-	
-	return true;
-}
-	
-static bool Config_AddArch(const char *NewArch)
-{
-	int Inc = 0;
-	const unsigned Max = (sizeof SupportedArch / sizeof *SupportedArch) - 1;
-	
-	for (; *SupportedArch[Inc] != '\0' && Inc < Max; ++Inc);
-	
-	if (Inc == Max) return false;
-	
-	SubStrings.Copy(SupportedArch[Inc], NewArch, sizeof SupportedArch[Inc]);
 	
 	return true;
 }
 
 bool Config_ArchPresent(const char *CheckArch)
 {
-	int Inc = 0;
-	const unsigned Max = (sizeof SupportedArch / sizeof *SupportedArch) - 1;
-
-	for (; *SupportedArch[Inc] != '\0' && Inc < Max; ++Inc)
-	{
-		if (!strcmp(SupportedArch[Inc], CheckArch)) return true;
-	}
-	
-	return false;
+	return SupportedArches.count(CheckArch);
 }
 

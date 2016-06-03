@@ -92,7 +92,7 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 	
 	if (!Descriptor) return false;
 	
-	char *FileBuf = calloc(FileStat.st_size + 1, 1);
+	char *FileBuf = (char*)calloc(FileStat.st_size + 1, 1);
 	fread(FileBuf, 1, FileStat.st_size, Descriptor);
 	fclose(Descriptor);
 	
@@ -108,11 +108,12 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 {
 	//cd to the new directory
-	printf("---\nCreating package from directory %s\n---\nPackageID=%s\nVersionString=%s\nArch=%s\nPackageGeneration=%u\n", Directory, Job->PackageID, Job->VersionString, Job->Arch, Job->PackageGeneration);
+	printf("---\nCreating package from directory %s\n---\nPackageID=%s\nVersionString=%s\nArch=%s\nPackageGeneration=%u\n",
+			Directory, ~Job->PackageID, ~Job->VersionString, ~Job->Arch, Job->PackageGeneration);
 	
 	char PackageFullName[512];
 	//Create a directory for the package.
-	snprintf(PackageFullName, sizeof PackageFullName, "%s_%s-%u.%s", Job->PackageID, Job->VersionString, Job->PackageGeneration, Job->Arch); //Build the name we'll use while we're at it.
+	snprintf(PackageFullName, sizeof PackageFullName, "%s_%s-%u.%s", ~Job->PackageID, ~Job->VersionString, Job->PackageGeneration, ~Job->Arch); //Build the name we'll use while we're at it.
 
 	printf("Creating temporary directory %s...\n", PackageFullName);
 
@@ -263,7 +264,7 @@ bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath)
 	
 	char MetadataBuf[8192];
 	snprintf(MetadataBuf, sizeof MetadataBuf, "PackageID=%s\nVersionString=%s\nArch=%s\nPackageGeneration=%u\n",
-			Pkg->PackageID, Pkg->VersionString, Pkg->Arch, Pkg->PackageGeneration);
+			Pkg->PackageID.c_str(), Pkg->VersionString.c_str(), Pkg->Arch.c_str(), Pkg->PackageGeneration);
 	
 	fwrite(MetadataBuf, 1, strlen(MetadataBuf), Desc);
 	
@@ -275,31 +276,31 @@ bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath)
 	
 	if (*Pkg->Cmds.PreInstall)
 	{
-		snprintf(TmpBuf, sizeof TmpBuf, "PreInstall=%s\n", Pkg->Cmds.PreInstall);
+		snprintf(TmpBuf, sizeof TmpBuf, "PreInstall=%s\n", ~Pkg->Cmds.PreInstall);
 		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
 	}
 	
 	if (*Pkg->Cmds.PostInstall)
 	{
-		snprintf(TmpBuf, sizeof TmpBuf, "PostInstall=%s\n", Pkg->Cmds.PostInstall);
+		snprintf(TmpBuf, sizeof TmpBuf, "PostInstall=%s\n", ~Pkg->Cmds.PostInstall);
 		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
 	}
 	
 	if (*Pkg->Cmds.PreUninstall)
 	{
-		snprintf(TmpBuf, sizeof TmpBuf, "PreUninstall=%s\n", Pkg->Cmds.PreUninstall);
+		snprintf(TmpBuf, sizeof TmpBuf, "PreUninstall=%s\n", ~Pkg->Cmds.PreUninstall);
 		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
 	}
 	
 	if (*Pkg->Cmds.PostUninstall)
 	{
-		snprintf(TmpBuf, sizeof TmpBuf, "PostUninstall=%s\n", Pkg->Cmds.PostUninstall);
+		snprintf(TmpBuf, sizeof TmpBuf, "PostUninstall=%s\n", ~Pkg->Cmds.PostUninstall);
 		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
 	}
 	
 	if (*Pkg->Description)
 	{
-		snprintf(TmpBuf, sizeof TmpBuf, "Description=%s\n", Pkg->Description);
+		snprintf(TmpBuf, sizeof TmpBuf, "Description=%s\n", ~Pkg->Description);
 		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
 	}
 	
@@ -483,7 +484,7 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 		puts("Descriptor failure.");
 		return false;
 	}
-	char *Buffer = malloc(FileStat.st_size + 1);
+	char *Buffer = (char*)malloc(FileStat.st_size + 1);
 	fread(Buffer, 1, FileStat.st_size, Desc);
 	Buffer[FileStat.st_size] = '\0';
 	fclose(Desc);
@@ -543,7 +544,8 @@ static bool Package_MakeAllChecksums(const char *Directory, const char *FileList
 	//Get the file list into memory.
 	FILE *Desc = fopen(FileListPath, "rb");
 	
-	char *Buffer = calloc(FileStat.st_size + 1, 1);
+	char *Buffer = new char[FileStat.st_size + 1];
+	Buffer[FileStat.st_size] = '\0';
 	fread(Buffer, 1, FileStat.st_size, Desc);
 	fclose(Desc);
 	
@@ -570,7 +572,7 @@ static bool Package_MakeAllChecksums(const char *Directory, const char *FileList
 		//Build the checksum.
 		if (!Package_MakeFileChecksum(PathBuf, Checksum, sizeof Checksum))
 		{
-			free(Buffer);
+			delete[] Buffer;
 			return false;
 		}
 		
@@ -581,7 +583,7 @@ static bool Package_MakeAllChecksums(const char *Directory, const char *FileList
 		fputc('\n', OutDesc);
 	}
 	
-	free(Buffer);
+	delete[] Buffer;
 	return true;
 }
 	
@@ -609,7 +611,7 @@ bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned Ou
 		
 	unsigned long long SizeToRead = FileStat.st_size >= SHA1_PER_READ_SIZE ? SHA1_PER_READ_SIZE : FileStat.st_size;
 	size_t Read = 0;
-	char *ReadBuf = malloc(SHA1_PER_READ_SIZE);
+	char *ReadBuf = (char*)malloc(SHA1_PER_READ_SIZE);
 	
 	do
 	{
@@ -656,7 +658,7 @@ bool Package_VerifyChecksums(const char *PackageDir)
 		return false;
 	}
 	
-	char *Buf = calloc(FileStat.st_size + 1, 1);
+	char *Buf = (char*)calloc(FileStat.st_size + 1, 1);
 	
 	fread(Buf, 1, FileStat.st_size, Desc);
 	Buf[FileStat.st_size] = '\0';

@@ -108,7 +108,7 @@ struct PackageList *DB_Add(const struct Package *Pkg)
 	
 	if (!*List)
 	{
-		*List = Worker = calloc(sizeof(struct PackageList), 1);
+		*List = Worker = (PackageList*)calloc(sizeof(struct PackageList), 1);
 	}
 	else
 	{
@@ -116,7 +116,7 @@ struct PackageList *DB_Add(const struct Package *Pkg)
 		
 		while (Worker->Next) Worker = Worker->Next;
 		
-		Worker->Next = calloc(sizeof(struct PackageList), 1);
+		Worker->Next = (PackageList*)calloc(sizeof(struct PackageList), 1);
 		Worker->Next->Prev = Worker;
 		Worker = Worker->Next;
 	}
@@ -198,7 +198,7 @@ const char *DB_Disk_GetChecksums(const char *PackageID, const char *Sysroot)
 	
 	if (!Desc) return NULL;
 	
-	char *Buffer = malloc(FileStat.st_size + 1);
+	char *Buffer = (char*)malloc(FileStat.st_size + 1);
 	fread(Buffer, 1, FileStat.st_size, Desc);
 	fclose(Desc);
 	Buffer[FileStat.st_size] = '\0';
@@ -223,7 +223,7 @@ const char *DB_Disk_GetFileList(const char *PackageID, const char *Arch, const c
 	
 	if (!Desc) return NULL;
 	
-	char *Buffer = malloc(FileStat.st_size + 1);
+	char *Buffer = (char*)malloc(FileStat.st_size + 1);
 	fread(Buffer, 1, FileStat.st_size, Desc);
 	fclose(Desc);
 	Buffer[FileStat.st_size] = '\0';
@@ -248,7 +248,7 @@ const char *DB_Disk_GetFileListDyn(const char *InfoDir)
 	
 	if (!Desc) return NULL;
 	
-	char *Buffer = malloc(FileStat.st_size + 1);
+	char *Buffer = (char*)malloc(FileStat.st_size + 1);
 	fread(Buffer, 1, FileStat.st_size, Desc);
 	fclose(Desc);
 	Buffer[FileStat.st_size] = '\0';
@@ -272,8 +272,7 @@ bool DB_Disk_GetMetadata(const char *Path, struct Package *OutPkg)
 	if (!Desc) return false;
 	
 
-	char Text[FileStat.st_size + 1]; /*a variable length array. Might be faster than calling malloc(),
-	* and since this function will be used a lot, seems appropriate. File size should not total even 1kb.*/
+	char *Text = new char[FileStat.st_size + 1];
 	
 	fread(Text, 1, FileStat.st_size, Desc);
 	fclose(Desc);
@@ -281,28 +280,33 @@ bool DB_Disk_GetMetadata(const char *Path, struct Package *OutPkg)
 	const char *Iter = Text;
 	
 	char Line[4096];
+	char Temp[sizeof Line];
 	
 	while (SubStrings.Line.GetLine(Line, sizeof Line, &Iter))
 	{
 		if (SubStrings.StartsWith("PackageID=", Line))
 		{
 			const char *Data = Line + (sizeof "PackageID=" - 1);
-			SubStrings.Copy(OutPkg->PackageID, Data, sizeof OutPkg->PackageID);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->PackageID = Temp;
 		}
 		else if (SubStrings.StartsWith("VersionString=", Line))
 		{
 			const char *Data = Line + (sizeof "VersionString=" - 1);
-			SubStrings.Copy(OutPkg->VersionString, Data, sizeof OutPkg->VersionString);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->VersionString = Temp;
 		}
 		else if (SubStrings.StartsWith("Arch=", Line))
 		{
 			const char *Data = Line + (sizeof "Arch=" - 1);
-			SubStrings.Copy(OutPkg->Arch, Data, sizeof OutPkg->Arch);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Arch = Temp;
 		}
 		else if (SubStrings.StartsWith("Description=", Line))
 		{
 			const char *Data = Line + (sizeof "Description=" - 1);
-			SubStrings.Copy(OutPkg->Description, Data, sizeof OutPkg->Description);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Description = Temp;
 		}
 		else if (SubStrings.StartsWith("PackageGeneration=", Line))
 		{
@@ -312,35 +316,43 @@ bool DB_Disk_GetMetadata(const char *Path, struct Package *OutPkg)
 		else if (SubStrings.StartsWith("PreInstall=", Line))
 		{
 			const char *Data = Line + (sizeof "PreInstall=" - 1);
-			SubStrings.Copy(OutPkg->Cmds.PreInstall, Data, sizeof OutPkg->Cmds.PreInstall);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Cmds.PreInstall = Temp;
 		}
 		else if (SubStrings.StartsWith("PostInstall=", Line))
 		{
 			const char *Data = Line + (sizeof "PostInstall=" - 1);
-			SubStrings.Copy(OutPkg->Cmds.PostInstall, Data, sizeof OutPkg->Cmds.PostInstall);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Cmds.PostInstall = Temp;
 		}
 		else if (SubStrings.StartsWith("PreUninstall=", Line))
 		{
 			const char *Data = Line + (sizeof "PreUninstall=" - 1);
-			SubStrings.Copy(OutPkg->Cmds.PreUninstall, Data, sizeof OutPkg->Cmds.PreUninstall);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Cmds.PreUninstall = Temp;
 		}
 		else if (SubStrings.StartsWith("PostUninstall=", Line))
 		{
 			const char *Data = Line + (sizeof "PostUninstall=" - 1);
-			SubStrings.Copy(OutPkg->Cmds.PostUninstall, Data, sizeof OutPkg->Cmds.PostUninstall);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Cmds.PostUninstall = Temp;
 		}
 		else if (SubStrings.StartsWith("PreUpdate=", Line))
 		{
 			const char *Data = Line + (sizeof "PreUpdate=" - 1);
-			SubStrings.Copy(OutPkg->Cmds.PreUpdate, Data, sizeof OutPkg->Cmds.PreUpdate);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Cmds.PreUpdate = Temp;
 		}
 		else if (SubStrings.StartsWith("PostUpdate=", Line))
 		{
 			const char *Data = Line + (sizeof "PostUpdate=" - 1);
-			SubStrings.Copy(OutPkg->Cmds.PostUpdate, Data, sizeof OutPkg->Cmds.PostUpdate);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Cmds.PostUpdate = Temp;
 		}
 		else continue; //Ignore anything that doesn't make sense.
 	}
+	
+	delete[] Text;
 	
 	return true;
 }
@@ -359,77 +371,86 @@ static bool DB_Disk_LoadPackage(const char *Path)
 	if (!Desc) return false;
 
 
-	char Text[FileStat.st_size + 1]; /*a variable length array. Might be faster than calling malloc(),
-	* and since this function will be used a lot, seems appropriate. File size should not total even 1kb.*/
+	char *Text = new char[FileStat.st_size + 1];
 	
 	fread(Text, 1, FileStat.st_size, Desc);
 	fclose(Desc);
 	
 	const char *Iter = Text;
 	
-	char Line[4096];
+	char Line[4096], Temp[sizeof Line];
 	struct Package Pkg;
 	while (SubStrings.Line.GetLine(Line, sizeof Line, &Iter))
 	{
 		if (SubStrings.StartsWith("PackageID=", Line))
 		{
 			const char *Data = Line + (sizeof "PackageID=" - 1);
-			SubStrings.Copy(Pkg.PackageID, Data, sizeof Pkg.PackageID);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			Pkg.PackageID = Temp;
 		}
 		else if (SubStrings.StartsWith("VersionString=", Line))
 		{
 			const char *Data = Line + (sizeof "VersionString=" - 1);
-			SubStrings.Copy(Pkg.VersionString, Data, sizeof Pkg.VersionString);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			Pkg.VersionString = Temp;
 		}
 		else if (SubStrings.StartsWith("Arch=", Line))
 		{
 			const char *Data = Line + (sizeof "Arch=" - 1);
-			SubStrings.Copy(Pkg.Arch, Data, sizeof Pkg.Arch);
-		}
-		else if (SubStrings.StartsWith("PreInstall=", Line))
-		{
-			const char *Data = Line + (sizeof "PreInstall=" - 1);
-			SubStrings.Copy(Pkg.Cmds.PreInstall, Data, sizeof Pkg.Cmds.PreInstall);
-		}
-		else if (SubStrings.StartsWith("PostInstall=", Line))
-		{
-			const char *Data = Line + (sizeof "PostInstall=" - 1);
-			SubStrings.Copy(Pkg.Cmds.PostInstall, Data, sizeof Pkg.Cmds.PostInstall);
-		}
-		else if (SubStrings.StartsWith("PreUninstall=", Line))
-		{
-			const char *Data = Line + (sizeof "PreUninstall=" - 1);
-			SubStrings.Copy(Pkg.Cmds.PreUninstall, Data, sizeof Pkg.Cmds.PreUninstall);
-		}
-		else if (SubStrings.StartsWith("PostUninstall=", Line))
-		{
-			const char *Data = Line + (sizeof "PostUninstall=" - 1);
-			SubStrings.Copy(Pkg.Cmds.PostUninstall, Data, sizeof Pkg.Cmds.PostUninstall);
-		}
-		else if (SubStrings.StartsWith("PreUpdate=", Line))
-		{
-			const char *Data = Line + (sizeof "PreUpdate=" - 1);
-			SubStrings.Copy(Pkg.Cmds.PreUpdate, Data, sizeof Pkg.Cmds.PreUpdate);
-		}
-		else if (SubStrings.StartsWith("PostUpdate=", Line))
-		{
-			const char *Data = Line + (sizeof "PostUpdate=" - 1);
-			SubStrings.Copy(Pkg.Cmds.PostUpdate, Data, sizeof Pkg.Cmds.PostUpdate);
-		}
-		else if (SubStrings.StartsWith("PackageGeneration=", Line))
-		{
-			const char *Data = Line + (sizeof "PackageGeneration=" - 1);
-			Pkg.PackageGeneration = atoi(Data);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			Pkg.Arch = Temp;
 		}
 		else if (SubStrings.StartsWith("Description=", Line))
 		{
 			const char *Data = Line + (sizeof "Description=" - 1);
-			SubStrings.Copy(Pkg.Description, Data, sizeof Pkg.Description);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			Pkg.Description = Temp;
+		}
+		else if (SubStrings.StartsWith("PackageGeneration=", Line))
+		{
+			const char *Data = Line + (sizeof "Arch=" - 1);
+			Pkg.PackageGeneration = atoi(Data);
+		}
+		else if (SubStrings.StartsWith("PreInstall=", Line))
+		{
+			const char *Data = Line + (sizeof "PreInstall=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			Pkg.Cmds.PreInstall = Temp;
+		}
+		else if (SubStrings.StartsWith("PostInstall=", Line))
+		{
+			const char *Data = Line + (sizeof "PostInstall=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			Pkg.Cmds.PostInstall = Temp;
+		}
+		else if (SubStrings.StartsWith("PreUninstall=", Line))
+		{
+			const char *Data = Line + (sizeof "PreUninstall=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			Pkg.Cmds.PreUninstall = Temp;
+		}
+		else if (SubStrings.StartsWith("PostUninstall=", Line))
+		{
+			const char *Data = Line + (sizeof "PostUninstall=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			Pkg.Cmds.PostUninstall = Temp;
+		}
+		else if (SubStrings.StartsWith("PreUpdate=", Line))
+		{
+			const char *Data = Line + (sizeof "PreUpdate=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			Pkg.Cmds.PreUpdate = Temp;
+		}
+		else if (SubStrings.StartsWith("PostUpdate=", Line))
+		{
+			const char *Data = Line + (sizeof "PostUpdate=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			Pkg.Cmds.PostUpdate = Temp;
 		}
 		else continue; //Ignore anything that doesn't make sense.
 	}
 	
-	
+	delete[] Text;
 	//Add the package to the linked list.
 	DB_Add(&Pkg);
 	
@@ -517,7 +538,7 @@ bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot)
 	if (!DB_Disk_GetMetadata(InInfoDir, &Pkg)) return false;
 	
 	//Build path for the package.
-	snprintf(Path, sizeof Path, "%s/" DB_PATH "%s.%s", Sysroot, Pkg.PackageID, Pkg.Arch);
+	snprintf(Path, sizeof Path, "%s/" DB_PATH "%s.%s", Sysroot, ~Pkg.PackageID, ~Pkg.Arch);
 	
 	struct stat DirStat;
 	

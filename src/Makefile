@@ -1,25 +1,25 @@
 
 CC=gcc
 CXX=g++
-CXXFLAGS=-std=gnu++98 -pedantic -Wall -g -O0 -ftrapv -fstrict-aliasing -Wstrict-aliasing
-CFLAGS=-std=gnu99 -pedantic -Wall -g -O0 -ftrapv -fstrict-aliasing -Wstrict-aliasing
+CXXFLAGS=-std=gnu++11 -pedantic -Wall -g3 -Og -ftrapv -fstrict-aliasing -Wstrict-aliasing
+CFLAGS=-std=gnu99 -pedantic -Wall -g -Og -ftrapv -fstrict-aliasing -Wstrict-aliasing
 LDFLAGS=-lcrypto substrings/libsubstrings.a
 
 all: config action main package db files
 	$(MAKE) -C substrings static
 	$(CXX) config.o action.o main.o package.o db.o files.o $(LDFLAGS) -o ../packrat
 config:
-	$(CC) -c $(CFLAGS) config.c 
+	$(CXX) -c $(CXXFLAGS) config.cpp
 main:
-	$(CC) -c $(CFLAGS) main.c 
+	$(CXX) -c $(CXXFLAGS) main.cpp 
 package:
-	$(CC) -c $(CFLAGS) package.c 
+	$(CXX) -c $(CXXFLAGS) package.cpp 
 action:
-	$(CC) -c $(CFLAGS) action.c 
+	$(CXX) -c $(CXXFLAGS) action.cpp 
 db:
-	$(CC) -c $(CFLAGS) db.c 
+	$(CXX) -c $(CXXFLAGS) db.cpp 
 files:
-	$(CC) -c $(CFLAGS) files.c 
+	$(CXX) -c $(CXXFLAGS) files.cpp 
 
 clean:
 	rm -f *.o *.gch packrat

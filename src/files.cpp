@@ -150,7 +150,7 @@ bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite)
 	//Do the copy.
 	const unsigned SizeToRead = 1024 * 1024; //1MB
 	unsigned AmountRead = 0;
-	char *ReadBuf = malloc(SizeToRead);
+	char *ReadBuf = (char*)malloc(SizeToRead);
 	do
 	{
 		AmountRead = fread(ReadBuf, 1, SizeToRead, In);

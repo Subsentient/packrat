@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 	setvbuf(stderr, NULL, _IONBF, 0);
 	enum OperationMode Mode = OP_NONE;
 	
-	struct Package Pkg = { .PackageGeneration = 0 }; //Zero-initialized
+	struct Package Pkg = { 0 }; //Zero-initialized
 	
 	if (getuid() != 0)
 	{
@@ -76,17 +76,21 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	
-	unsigned Inc = 2;
+	int Inc = 2;
 	
 	char CreationDirectory[4096] = { '\0' };
 	char Sysroot[4096] = { "/" };
 	char InFile[4096] = { '\0' };
 	
+	char Temp[256];
+	
 	for (; Inc < argc; ++Inc)
 	{
 		if (SubStrings.StartsWith("--pkgid=", argv[Inc]))
 		{
-			SubStrings.Extract(Pkg.PackageID, sizeof Pkg.PackageID, "=", NULL,  argv[Inc]);
+			char PkgID[256];
+			SubStrings.Extract(PkgID, sizeof PkgID, "=", NULL,  argv[Inc]);
+			Pkg.PackageID = PkgID;
 		}
 		else if (SubStrings.StartsWith("--sysroot=", argv[Inc]))
 		{
@@ -115,15 +119,21 @@ int main(int argc, char **argv)
 		}
 		else if (SubStrings.StartsWith("--versionstring=", argv[Inc]))
 		{
-			SubStrings.Extract(Pkg.VersionString, sizeof Pkg.VersionString, "=", NULL, argv[Inc]);
+			char Ver[256];
+			SubStrings.Extract(Ver, sizeof Ver, "=", NULL, argv[Inc]);
+			Pkg.VersionString = Ver;
 		}
 		else if (SubStrings.StartsWith("--description=", argv[Inc]))
 		{
-			SubStrings.Extract(Pkg.Description, sizeof Pkg.Description, "=", NULL, argv[Inc]);
+			char Desc[256];
+			SubStrings.Extract(Desc, sizeof Desc, "=", NULL, argv[Inc]);
+			Pkg.Description = Desc;
 		}
 		else if (SubStrings.StartsWith("--arch=", argv[Inc]))
 		{
-			SubStrings.Extract(Pkg.Arch, sizeof Pkg.Arch, "=", NULL, argv[Inc]);
+			char Arch[64];
+			SubStrings.Extract(Arch, sizeof Arch, "=", NULL, argv[Inc]);
+			Pkg.Arch = Arch;
 		}
 		else if (SubStrings.StartsWith("--packagegeneration=", argv[Inc]))
 		{
@@ -134,27 +144,33 @@ int main(int argc, char **argv)
 		}
 		else if (SubStrings.StartsWith("--preinstallcmd=", argv[Inc]))
 		{
-			SubStrings.Extract(Pkg.Cmds.PreInstall, sizeof Pkg.Cmds.PreInstall, "=", NULL, argv[Inc]);
+			SubStrings.Extract(Temp, sizeof Temp, "=", NULL, argv[Inc]);
+			Pkg.Cmds.PreInstall = Temp;
 		}
 		else if (SubStrings.StartsWith("--postinstallcmd=", argv[Inc]))
 		{
-			SubStrings.Extract(Pkg.Cmds.PostInstall, sizeof Pkg.Cmds.PostInstall, "=", NULL, argv[Inc]);
+			SubStrings.Extract(Temp, sizeof Temp, "=", NULL, argv[Inc]);
+			Pkg.Cmds.PostInstall = Temp;
 		}
 		else if (SubStrings.StartsWith("--preuninstallcmd=", argv[Inc]))
 		{
-			SubStrings.Extract(Pkg.Cmds.PreUninstall, sizeof Pkg.Cmds.PreUninstall, "=", NULL, argv[Inc]);
+			SubStrings.Extract(Temp, sizeof Temp, "=", NULL, argv[Inc]);
+			Pkg.Cmds.PreUninstall = Temp;
 		}
 		else if (SubStrings.StartsWith("--postuninstallcmd=", argv[Inc]))
 		{
-			SubStrings.Extract(Pkg.Cmds.PostUninstall, sizeof Pkg.Cmds.PostUninstall, "=", NULL, argv[Inc]);
+			SubStrings.Extract(Temp, sizeof Temp, "=", NULL, argv[Inc]);
+			Pkg.Cmds.PostUninstall = Temp;
 		}
 		else if (SubStrings.StartsWith("--preupdatecmd=", argv[Inc]))
 		{
-			SubStrings.Extract(Pkg.Cmds.PreUpdate, sizeof Pkg.Cmds.PreUpdate, "=", NULL, argv[Inc]);
+			SubStrings.Extract(Temp, sizeof Temp, "=", NULL, argv[Inc]);
+			Pkg.Cmds.PreUpdate = Temp;
 		}
 		else if (SubStrings.StartsWith("--postupdatecmd=", argv[Inc]))
 		{
-			SubStrings.Extract(Pkg.Cmds.PostUpdate, sizeof Pkg.Cmds.PostUpdate, "=", NULL, argv[Inc]);
+			SubStrings.Extract(Temp, sizeof Temp, "=", NULL, argv[Inc]);
+			Pkg.Cmds.PostUpdate = Temp;
 		}
 		else
 		{
@@ -168,7 +184,7 @@ int main(int argc, char **argv)
 	{
 		case OP_CREATE:
 		{
-			if (!*Pkg.PackageID || !*Pkg.Arch || !*Pkg.VersionString || !*CreationDirectory)
+			if (Pkg.PackageID.empty() || Pkg.Arch.empty() || Pkg.VersionString.empty() || !*CreationDirectory)
 			{
 				fputs("Missing arguments. Need package ID, architecture, version string, and creation directory.\n", stderr);
 				return 1;
@@ -211,12 +227,12 @@ int main(int argc, char **argv)
 		}
 		case OP_REMOVE:
 		{
-			if (!*Pkg.PackageID)
+			if (Pkg.PackageID.empty())
 			{
 				fputs("Missing arguments. Need at least a package ID, optionally an architecture.\n", stderr);
 				return 1;
 			}
-			return !Action_UninstallPackage(Pkg.PackageID, *Pkg.Arch ? Pkg.Arch : NULL, Sysroot);
+			return !Action_UninstallPackage(Pkg.PackageID.c_str(), Pkg.Arch.empty() ? NULL : Pkg.Arch.c_str(), Sysroot);
 		}
 		case OP_UPDATE:
 		{

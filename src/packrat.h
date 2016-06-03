@@ -18,37 +18,66 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #ifndef _PACKRAT_H_
 #define _PACKRAT_H_
 
-#include <stdbool.h>
 #include <sys/stat.h> //For mode_t
 #include <pwd.h> //For uid_t
 #include <grp.h> //For gid_t
+#include <string>
+#include <list>
+#include <vector>
+#include <map>
+#include <set>
 
 #define CONFIGFILE_PATH "/etc/packrat.conf"
 #define DB_PATH "/var/packrat/pkgdb/"
 #define DBCORE_SIZE ((('z'-'a')+1) + (('9'-'0')+1))
 
 //Structs
-struct PackageList
-{
-	struct Package
-	{
-		unsigned PackageGeneration; //The build number of this package, so we can fix busted packages of the same version of software.
 
-		char PackageID[256]; //name of the package.
-		char VersionString[128]; //complete version of the software we're dealing with
-		char Description[256]; //A brief summary of the package contents, optional**
-		char Arch[64]; //Package architecture
-		struct
-		{ //Commands executed at various stages of the install process.
-			char PreInstall[256];
-			char PostInstall[256];
-			char PreUninstall[256];
-			char PostUninstall[256];
-			char PreUpdate[256];
-			char PostUpdate[256];
-		} Cmds;
-	} Pkg;
-	
+struct PkString : public std::string
+{ //Wrapper to make PkString more friendly.
+	operator bool(void) const
+	{
+		return this->empty();
+	}
+	operator const char *(void) const
+	{
+		return this->c_str();
+	}
+	const char *operator ~(void) const
+	{
+		return this->c_str();
+	}
+	char operator *(void) const
+	{
+		return *this->c_str();
+	}
+	PkString(const char *Stringy) : std::string(Stringy) {}
+	PkString(const std::string &Stringy) : std::string(Stringy) {}
+	PkString(void) : std::string() {}
+};
+
+struct Package
+{
+	unsigned PackageGeneration; //The build number of this package, so we can fix busted packages of the same version of software.
+
+	PkString PackageID; //name of the package.
+	PkString VersionString; //complete version of the software we're dealing with
+	PkString Description; //A brief summary of the package contents, optional**
+	PkString Arch; //Package architecture
+	struct
+	{ //Commands executed at various stages of the install process.
+		PkString PreInstall;
+		PkString PostInstall;
+		PkString PreUninstall;
+		PkString PostUninstall;
+		PkString PreUpdate;
+		PkString PostUpdate;
+	} Cmds;
+};
+
+struct PackageList
+{	
+	struct Package Pkg;
 	struct PackageList *Prev;
 	struct PackageList *Next;
 
