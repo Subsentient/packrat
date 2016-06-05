@@ -538,7 +538,7 @@ bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot)
 	if (!DB_Disk_GetMetadata(InInfoDir, &Pkg)) return false;
 	
 	//Build path for the package.
-	snprintf(Path, sizeof Path, "%s/" DB_PATH "%s.%s", Sysroot, ~Pkg.PackageID, ~Pkg.Arch);
+	snprintf(Path, sizeof Path, "%s/" DB_PATH "%s.%s", Sysroot, +Pkg.PackageID, +Pkg.Arch);
 	
 	struct stat DirStat;
 	

@@ -21,6 +21,8 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <sys/stat.h> //For mode_t
 #include <pwd.h> //For uid_t
 #include <grp.h> //For gid_t
+#include <stdint.h> //For uint8_t
+#include <stdio.h> //For Utils::Slurp()
 #include <string>
 #include <list>
 #include <vector>
@@ -33,27 +35,42 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 //Structs
 
+
 struct PkString : public std::string
-{ //Wrapper to make PkString more friendly.
-	operator bool(void) const
+{ //Wrapper to make std::string more friendly.
+	operator bool			(void) const 	{ return this->empty(); }
+	operator const char *	(void) const 	{ return this->c_str(); }
+	const char *operator+	(void) const 	{ return this->c_str(); }
+	char operator *			(void) const 	{ return *this->c_str(); }
+	
+	//We need these so we can still use our other overloads in expressions with temporaries.
+	PkString operator+ (const PkString &Ref) const
 	{
-		return this->empty();
+		return static_cast<const std::string&>(*this) + +Ref;
 	}
-	operator const char *(void) const
+	PkString operator+ (const char *In) const
 	{
-		return this->c_str();
-	}
-	const char *operator ~(void) const
-	{
-		return this->c_str();
-	}
-	char operator *(void) const
-	{
-		return *this->c_str();
+		return static_cast<const std::string&>(*this) + In;
 	}
 	PkString(const char *Stringy) : std::string(Stringy) {}
 	PkString(const std::string &Stringy) : std::string(Stringy) {}
 	PkString(void) : std::string() {}
+};
+
+struct PasswdUser
+{
+	PkString Username;
+	PkString Groupname;
+	PkString Home;
+	PkString Shell;
+	PkString RealName;
+	
+	uid_t UserID;
+	gid_t GroupID;
+	
+	PasswdUser(const char *InUsername = "", const char *InGroupname = "") : Username(InUsername), Groupname(InGroupname), UserID(), GroupID() {}
+	
+	operator bool(void) const { return *Username; }
 };
 
 struct Package
@@ -83,19 +100,19 @@ struct PackageList
 
 };
 
-//Functions
+#include "utils.h"
 
-//action.c
+//action.cpp
 bool Action_InstallPackage(const char *PkgPath, const char *Sysroot);
 bool Action_UninstallPackage(const char *PackageID, const char *Arch, const char *Sysroot);
 bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot);
 bool Action_CreateTempCacheDir(char *OutBuf, const unsigned OutBufSize, const char *Sysroot);
 
-//config.c
+//config.cpp
 bool Config_ArchPresent(const char *CheckArch);
 bool Config_LoadConfig(const char *Sysroot);
 
-//package.c
+//package.cpp
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize);
 bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
 bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize);
@@ -108,14 +125,14 @@ bool Package_VerifyChecksums(const char *PackageDir);
 bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, const char *FileListBuf);
 bool Package_CompressPackage(const char *PackageTempDir, const char *OutFile);
 
-//files.c
+//files.cpp
 bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite);
 bool Files_Mkdir(const char *Source, const char *Destination);
 bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite);
 bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut);
 struct FileAttributes Files_GetDefaultAttributes(void);
 
-//db.c
+//db.cpp
 const char *DB_Disk_GetChecksums(const char *PackageID, const char *Sysroot);
 const char *DB_Disk_GetFileList(const char *PackageID, const char *Arch, const char *Sysroot);
 const char *DB_Disk_GetFileListDyn(const char *InfoDir);
@@ -129,8 +146,13 @@ bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot);
 struct PackageList *DB_Lookup(const char *PackageID, const char *Arch);
 bool DB_HasMultiArches(const char *PackageID);
 
+//passwd_w_sysroot.cpp
+struct PasswdUser PWSR_LookupUsername(const char *Sysroot, const char *Username);
+bool PWSR_LookupGroupname(const char *Sysroot, const char *Groupname, gid_t *OutGID);
+struct PasswdUser PWSR_LookupUserID(const char *Sysroot, const uid_t UID);
+PkString PWSR_LookupGroupID(const char *Sysroot, const gid_t GID);
+
 //Globals
-extern char SupportedArch[8][64];
 extern struct PackageList *DBCore[DBCORE_SIZE];
 
 #endif //_PACKRAT_H_

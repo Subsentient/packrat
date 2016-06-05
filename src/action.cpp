@@ -346,7 +346,7 @@ bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot)
 	//Delete temporary directory
 	Action_DeleteTempDir(Path);
 	
-	printf("Package %s.%s updated to \"%s_%s-%u.%s\"\n", ~Pkg.PackageID, ~Pkg.Arch, ~Pkg.PackageID, ~Pkg.VersionString, Pkg.PackageGeneration, ~Pkg.Arch);
+	printf("Package %s.%s updated to \"%s_%s-%u.%s\"\n", +Pkg.PackageID, +Pkg.Arch, +Pkg.PackageID, +Pkg.VersionString, Pkg.PackageGeneration, +Pkg.Arch);
 	
 	DB_Shutdown();
 	return true;
@@ -404,7 +404,7 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	//Yup, already installed.
 	if (Lookup)
 	{
-		fprintf(stderr, "Package %s.%s is already installed. The installed version is %s_%s-%u.%s\n", ~Pkg.PackageID, ~Pkg.Arch, ~Lookup->Pkg.PackageID, ~Lookup->Pkg.VersionString, Lookup->Pkg.PackageGeneration, ~Lookup->Pkg.Arch);
+		fprintf(stderr, "Package %s.%s is already installed. The installed version is %s_%s-%u.%s\n", +Pkg.PackageID, +Pkg.Arch, +Lookup->Pkg.PackageID, +Lookup->Pkg.VersionString, Lookup->Pkg.PackageGeneration, +Lookup->Pkg.Arch);
 		DB_Shutdown();
 		Action_DeleteTempDir(Path);
 		return false;
@@ -412,7 +412,7 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 
 	if (!Config_ArchPresent(Pkg.Arch))
 	{
-		fprintf(stderr, "Package's architecture %s not supported on this system.\n", ~Pkg.Arch);
+		fprintf(stderr, "Package's architecture %s not supported on this system.\n", +Pkg.Arch);
 		DB_Shutdown();
 		Action_DeleteTempDir(Path);
 		return false;
@@ -424,7 +424,7 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	if (!Package_VerifyChecksums(Path))
 	{
 		fprintf(stderr, "%s_%s-%u.%s: Package file checksum failure; package may be damaged.\n",
-				~Pkg.PackageID, ~Pkg.VersionString, Pkg.PackageGeneration, ~Pkg.Arch);
+				+Pkg.PackageID, +Pkg.VersionString, Pkg.PackageGeneration, +Pkg.Arch);
 		DB_Shutdown();
 		Action_DeleteTempDir(Path);
 		return false;
@@ -489,7 +489,7 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	//Delete temporary directory
 	Action_DeleteTempDir(Path);
 	
-	printf("Package %s_%s-%u.%s installed successfully.\n", ~Pkg.PackageID, ~Pkg.VersionString, Pkg.PackageGeneration, ~Pkg.Arch);
+	printf("Package %s_%s-%u.%s installed successfully.\n", +Pkg.PackageID, +Pkg.VersionString, Pkg.PackageGeneration, +Pkg.Arch);
 	
 	//Again, DB_Add is pointless with DB_Shutdown right after, but we're keeping it for now.
 	DB_Shutdown();
@@ -575,8 +575,8 @@ bool Action_UninstallPackage(const char *PackageID, const char *Arch, const char
 	fputs("Updating the package database...\n", stdout);
 	DB_Disk_DeletePackage(PackageID, PkgLookup->Pkg.Arch, Sysroot);
 	
-	printf("Package %s_%s-%u.%s uninstalled successfully.\n", ~PkgLookup->Pkg.PackageID, ~PkgLookup->Pkg.VersionString,
-			PkgLookup->Pkg.PackageGeneration, ~PkgLookup->Pkg.Arch);
+	printf("Package %s_%s-%u.%s uninstalled successfully.\n", +PkgLookup->Pkg.PackageID, +PkgLookup->Pkg.VersionString,
+			PkgLookup->Pkg.PackageGeneration, +PkgLookup->Pkg.Arch);
 	
 	DB_Delete(PackageID, PkgLookup->Pkg.Arch);
 	

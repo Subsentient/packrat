@@ -109,11 +109,11 @@ bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 {
 	//cd to the new directory
 	printf("---\nCreating package from directory %s\n---\nPackageID=%s\nVersionString=%s\nArch=%s\nPackageGeneration=%u\n",
-			Directory, ~Job->PackageID, ~Job->VersionString, ~Job->Arch, Job->PackageGeneration);
+			Directory, +Job->PackageID, +Job->VersionString, +Job->Arch, Job->PackageGeneration);
 	
 	char PackageFullName[512];
 	//Create a directory for the package.
-	snprintf(PackageFullName, sizeof PackageFullName, "%s_%s-%u.%s", ~Job->PackageID, ~Job->VersionString, Job->PackageGeneration, ~Job->Arch); //Build the name we'll use while we're at it.
+	snprintf(PackageFullName, sizeof PackageFullName, "%s_%s-%u.%s", +Job->PackageID, +Job->VersionString, Job->PackageGeneration, +Job->Arch); //Build the name we'll use while we're at it.
 
 	printf("Creating temporary directory %s...\n", PackageFullName);
 
@@ -276,31 +276,31 @@ bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath)
 	
 	if (*Pkg->Cmds.PreInstall)
 	{
-		snprintf(TmpBuf, sizeof TmpBuf, "PreInstall=%s\n", ~Pkg->Cmds.PreInstall);
+		snprintf(TmpBuf, sizeof TmpBuf, "PreInstall=%s\n", +Pkg->Cmds.PreInstall);
 		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
 	}
 	
 	if (*Pkg->Cmds.PostInstall)
 	{
-		snprintf(TmpBuf, sizeof TmpBuf, "PostInstall=%s\n", ~Pkg->Cmds.PostInstall);
+		snprintf(TmpBuf, sizeof TmpBuf, "PostInstall=%s\n", +Pkg->Cmds.PostInstall);
 		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
 	}
 	
 	if (*Pkg->Cmds.PreUninstall)
 	{
-		snprintf(TmpBuf, sizeof TmpBuf, "PreUninstall=%s\n", ~Pkg->Cmds.PreUninstall);
+		snprintf(TmpBuf, sizeof TmpBuf, "PreUninstall=%s\n", +Pkg->Cmds.PreUninstall);
 		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
 	}
 	
 	if (*Pkg->Cmds.PostUninstall)
 	{
-		snprintf(TmpBuf, sizeof TmpBuf, "PostUninstall=%s\n", ~Pkg->Cmds.PostUninstall);
+		snprintf(TmpBuf, sizeof TmpBuf, "PostUninstall=%s\n", +Pkg->Cmds.PostUninstall);
 		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
 	}
 	
 	if (*Pkg->Description)
 	{
-		snprintf(TmpBuf, sizeof TmpBuf, "Description=%s\n", ~Pkg->Description);
+		snprintf(TmpBuf, sizeof TmpBuf, "Description=%s\n", +Pkg->Description);
 		SubStrings.Cat(MetadataBuf, TmpBuf, sizeof MetadataBuf);
 	}
 	
@@ -314,7 +314,6 @@ bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath)
 	return true;
 }
 
- 
 bool Package_UpdateFiles(const char *PackageDir, const char *Sysroot, const char *OldFileListBuf, const char *NewFileListBuf)
 { //Deletes files that no longer exist in the newer version of the package, and then overwrites the remaining with new data.
 	if (!OldFileListBuf || !NewFileListBuf) return false;
@@ -534,25 +533,20 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 
 static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc)
 { //Build a checksums file list.
-	struct stat FileStat;
-	
-	if (stat(FileListPath, &FileStat) != 0)
+	PkString FileData;
+	try
+	{
+		FileData = Utils::Slurp(FileListPath);
+	}
+	catch (...)
 	{
 		return false;
 	}
 	
-	//Get the file list into memory.
-	FILE *Desc = fopen(FileListPath, "rb");
-	
-	char *Buffer = new char[FileStat.st_size + 1];
-	Buffer[FileStat.st_size] = '\0';
-	fread(Buffer, 1, FileStat.st_size, Desc);
-	fclose(Desc);
-	
 	char LineBuf[4096];
 	char PathBuf[4096];
 	
-	const char *Iter = Buffer;
+	const char *Iter = FileData;
 	
 	char Checksum[4096];
 	
@@ -572,7 +566,6 @@ static bool Package_MakeAllChecksums(const char *Directory, const char *FileList
 		//Build the checksum.
 		if (!Package_MakeFileChecksum(PathBuf, Checksum, sizeof Checksum))
 		{
-			delete[] Buffer;
 			return false;
 		}
 		
@@ -583,7 +576,6 @@ static bool Package_MakeAllChecksums(const char *Directory, const char *FileList
 		fputc('\n', OutDesc);
 	}
 	
-	delete[] Buffer;
 	return true;
 }
 	
@@ -718,6 +710,7 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 	
 	if (!(CurDir = opendir(Directory)))
 	{
+		puts(Directory);
 		fputs("Failed to opendir()\n", stderr);
 		return false;
 	}
@@ -744,7 +737,10 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		if (S_ISDIR(FileStat.st_mode))
 		{ //It's a directory.
 			
-			snprintf(OutStream, sizeof OutStream, "d %s\n", NewPath);
+			PasswdUser User = PWSR_LookupUserID("/", FileStat.st_uid);
+			PkString Group = PWSR_LookupGroupID("/", FileStat.st_gid);
+			
+			snprintf(OutStream, sizeof OutStream, "d %s:%s:%o %s\n", +User.Username, +Group, FileStat.st_mode, NewPath);
 			fwrite(OutStream, 1, strlen(OutStream), OutDesc); //Write the directory name.
 			
 			//Now we recurse and call the same function to process the subdir.
@@ -764,7 +760,10 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		}
 		//It's a file.
 		
-		snprintf(OutStream, sizeof OutStream, "f %s\n", NewPath);
+		PasswdUser User = PWSR_LookupUserID("/", FileStat.st_uid);
+		PkString Group = PWSR_LookupGroupID("/", FileStat.st_gid);
+		
+		snprintf(OutStream, sizeof OutStream, "f %s:%s:%o %s\n", +User.Username, +Group, FileStat.st_mode, NewPath);
 		fwrite(OutStream, 1, strlen(OutStream), OutDesc); 
 		
 	}
