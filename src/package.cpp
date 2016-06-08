@@ -32,7 +32,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 #define SHA1_PER_READ_SIZE ((1024 * 1024) * 5) //5MB
 
-static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath);
+static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath, const char *Sysroot = "/");
 static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc);
 static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList);
 	
@@ -42,6 +42,7 @@ bool Package_ExtractPackage(const char *AbsolutePathToPkg, const char *const Sys
 	{
 		return false;
 	}
+	PkString Derp;
 	
 	pid_t PID = fork();
 	if (PID == -1)
@@ -327,30 +328,40 @@ bool Package_UpdateFiles(const char *PackageDir, const char *Sysroot, const char
 	
 	
 	//Next we compare the old and new, and delete what was present in the old, but NOT the new.
-	char NewLine[4096], OldLine[4096];
 	
-	const char *Iter1 = OldFileListBuf, *Iter2 = NULL;
+	///We're doing this linked-list conversion to speed up the comparison (by a lot) for NewFileListBuf, mostly.
+	std::list<PkString> *OldList = Utils::LinesToLinkedList(OldFileListBuf);
+	std::list<PkString> *NewList = Utils::LinesToLinkedList(NewFileListBuf);
 	
-	while (SubStrings.Line.GetLine(OldLine, sizeof OldLine, &Iter1))
+	std::list<PkString>::iterator Iter1 = OldList->begin(), Iter2;
+	
+	for (; Iter1 != OldList->end(); ++Iter1)
 	{ ///This is almost certainly really expensive, but I'll be damned if I'm going to use a linked list or something for *just this*.
-		if (*OldLine == 'd') continue; //Don't do anything to directories.
+		Utils::FileListLine LineStruct = Utils::BreakdownFileListLine(*Iter1);
 		
-		for (Iter2 = NewFileListBuf;
-			SubStrings.Line.GetLine(NewLine, sizeof NewLine, &Iter2);)
+		if (LineStruct.Type == Utils::FileListLine::FLLTYPE_DIRECTORY) continue;
+		
+		for (Iter2 = NewList->begin(); Iter2 != NewList->end(); ++Iter2)
 		{
-			if (*NewLine == 'd') continue;
+			Utils::FileListLine LineStruct2 = Utils::BreakdownFileListLine(*Iter2);
+		
+			//Don't try to delete directories.
+			if (LineStruct2.Type == Utils::FileListLine::FLLTYPE_DIRECTORY) continue;
 
-			if (!strcmp(OldLine + (sizeof "f " - 1), NewLine + (sizeof "f " - 1))) goto SkipDelete;
+			//This file is supposed to be here, don't delete it.
+			if (LineStruct.Path == LineStruct2.Path) goto SkipDelete;
 		}
 		
 		//Delete obsolete file
-		char TmpBuf[4096];
-		snprintf(TmpBuf, sizeof TmpBuf, "%s/%s", Sysroot, OldLine + (sizeof "f " - 1));
-		unlink(TmpBuf);
+
+		unlink(PkString(Sysroot) + "/" + LineStruct.Path);
 		
 	SkipDelete:
 		continue;
 	}
+	
+	delete OldList;
+	delete NewList;
 	return true;
 
 }
@@ -359,36 +370,48 @@ bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, c
 {
 	char CurLine[4096];
 	const char *Iter = FileListBuf;
-	char Path1[4096], Path2[4096];
 	struct stat FileStat;
 	
 	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
 	{
-		const char *ActualPath = CurLine + 2; //Plus the 'd ' or 'f '
+		Utils::FileListLine LineStruct = Utils::BreakdownFileListLine(CurLine);
 		
-		snprintf(Path1, sizeof Path1, "%s/%s", Sysroot, ActualPath);
-		snprintf(Path2, sizeof Path2, "%s/files/%s", Destination, ActualPath);
+		uid_t User = PWSR_LookupUsername(Sysroot, LineStruct.User).UserID;
+		gid_t Group = 0;
+		PWSR_LookupGroupname(Sysroot, LineStruct.Group, &Group);
 		
-		if (*CurLine == 'd')
+		const char *ActualPath = LineStruct.Path; //Plus the 'd ' or 'f '
+		
+		const PkString Path1 = PkString(Sysroot) + '/' + ActualPath;
+		const PkString Path2 = PkString(Destination) + "/files/" + ActualPath;
+		
+		
+		switch (LineStruct.Type)
 		{
-			Files_Mkdir(Path1, Path2); //We don't care much if this fails, it updates the mode if the directory exists.
-		}
-		else if (*CurLine == 'f')
-		{
-			if (lstat(Path1, &FileStat) != 0)
+			case Utils::FileListLine::FLLTYPE_DIRECTORY:
 			{
-				return false;
+				Files_Mkdir(Path1, Path2, NULL, User, Group, LineStruct.Mode); //We don't care much if this fails, it updates the mode if the directory exists.
+				break;
 			}
-			
-			if (S_ISLNK(FileStat.st_mode))
+			case Utils::FileListLine::FLLTYPE_FILE:
 			{
-				if (!Files_SymlinkCopy(Path1, Path2, true)) return false;
+				if (lstat(Path1, &FileStat) != 0)
+				{
+					return false;
+				}
+				
+				if (S_ISLNK(FileStat.st_mode))
+				{
+					if (!Files_SymlinkCopy(Path1, Path2, true, NULL, User, Group)) return false;
+				}
+				else
+				{
+					if (!Files_FileCopy(Path1, Path2, true, NULL, User, Group, LineStruct.Mode)) return false;
+				}
+	
 			}
-			else
-			{
-				if (!Files_FileCopy(Path1, Path2, true)) return false;
-			}
-
+			default:
+				break;
 		}
 	}
 	return true;
@@ -398,36 +421,47 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 {
 	char CurLine[4096];
 	const char *Iter = FileListBuf;
-	char Path1[4096], Path2[4096];
 	struct stat FileStat;
 	
 	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
 	{
-		const char *ActualPath = CurLine + 2; //Plus the 'd ' or 'f '
+		Utils::FileListLine LineStruct = Utils::BreakdownFileListLine(CurLine);
+		gid_t GroupID = 0;
+		PasswdUser UserInfo = PWSR_LookupUsername(Sysroot, LineStruct.User);
+		uid_t &UserID = UserInfo.UserID;
 		
-		snprintf(Path1, sizeof Path1, "%s/files/%s", PackageDir, ActualPath);
-		snprintf(Path2, sizeof Path2, "%s/%s", Sysroot, ActualPath);
+		PWSR_LookupGroupname(Sysroot, LineStruct.Group, &GroupID);
 		
-		if (*CurLine == 'd')
+		const char *ActualPath = LineStruct.Path;
+		
+		PkString SrcPath = PkString(PackageDir) + "/files/" + ActualPath;
+		
+		switch (LineStruct.Type)
 		{
-			Files_Mkdir(Path1, Path2); //We don't care much if this fails, it updates the mode if the directory exists.
-		}
-		else if (*CurLine == 'f')
-		{
-			if (lstat(Path1, &FileStat) != 0)
+			case Utils::FileListLine::FLLTYPE_DIRECTORY:
 			{
-				return false;
+				Files_Mkdir(SrcPath, ActualPath, Sysroot, UserID, GroupID, LineStruct.Mode); //We don't care much if this fails, it updates the mode if the directory exists.
+				break;
 			}
-			
-			if (S_ISLNK(FileStat.st_mode))
+			case Utils::FileListLine::FLLTYPE_FILE:
 			{
-				if (!Files_SymlinkCopy(Path1, Path2, true)) return false;
+				if (lstat(SrcPath, &FileStat) != 0)
+				{
+					return false;
+				}
+				
+				if (S_ISLNK(FileStat.st_mode))
+				{
+					if (!Files_SymlinkCopy(SrcPath, ActualPath, true, Sysroot, UserID, GroupID)) return false;
+				}
+				else
+				{
+					if (!Files_FileCopy(SrcPath, ActualPath, true, Sysroot, UserID, GroupID, LineStruct.Mode)) return false;
+				}
+				break;
 			}
-			else
-			{
-				if (!Files_FileCopy(Path1, Path2, true)) return false;
-			}
-
+			default:
+				break;
 		}
 	}
 	return true;
@@ -437,30 +471,29 @@ bool Package_UninstallFiles(const char *Sysroot, const char *FileListBuf)
 {
 	char CurLine[4096];
 	struct stat FileStat;
-	char Path[4096];
 	const char *Iter = FileListBuf;
 	
 	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
 	{
-		const char *LineData = CurLine + 2;
+		Utils::FileListLine LineStruct = Utils::BreakdownFileListLine(CurLine);
 		
-		switch (*CurLine)
+		switch (LineStruct.Type)
 		{
-			case 'd':
-				continue; //We don't delete directories.
-			case 'f':
+			case Utils::FileListLine::FLLTYPE_FILE:
 			{
+				PkString Path = PkString(Sysroot) + "/" + LineStruct.Path;
 				//build a path for the file we're removing.
-				snprintf(Path, sizeof Path, "%s/%s", Sysroot, LineData);
 				
 				if (lstat(Path, &FileStat) != 0) continue;
 				
 				//Delete it.
 				if (unlink(Path) != 0)
 				{ //Just warn us on failure.
-					fprintf(stderr, "WARNING: Unable to uninstall file \"%s\"\n", Path);
+					fprintf(stderr, "WARNING: Unable to uninstall file \"%s\"\n", +Path);
 				}
 			}
+			default:
+				break;
 		}
 	}
 	return true;
@@ -469,65 +502,79 @@ bool Package_UninstallFiles(const char *Sysroot, const char *FileListBuf)
 static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList)
 { //Used when building a package.
 	
-	struct stat FileStat;
-	
-	if (stat(FileList, &FileStat) != 0)
+	PkString Buffer;
+	try
 	{
-		puts("Failed to stat");
-		return false;
-	
+		Buffer = Utils::Slurp(FileList);
 	}
-	FILE *Desc = fopen(FileList, "rb");
-	if (!Desc)
+	catch (...)
 	{
-		puts("Descriptor failure.");
 		return false;
 	}
-	char *Buffer = (char*)malloc(FileStat.st_size + 1);
-	fread(Buffer, 1, FileStat.st_size, Desc);
-	Buffer[FileStat.st_size] = '\0';
-	fclose(Desc);
 	
 	char Line[4096];
 	
 	const char *Iter = Buffer;
 	
-	char Path1[4096];
-	char Path2[4096];
+
+	
+	struct stat FileStat;
+	
+	PasswdUser LastUser;
+	PkString LastGroupText;
+	gid_t LastGroupID = 0;
 	
 	while (SubStrings.Line.GetLine(Line, sizeof Line, &Iter))
 	{
-		const char *ActualPath = Line + 2;
+		Utils::FileListLine LineStruct = Utils::BreakdownFileListLine(Line);
+		
+		PasswdUser User = LineStruct.User == LastUser.Username ? LastUser : PWSR_LookupUsername("/", LineStruct.User);
+		
+		gid_t GroupID = 0;
+		
+		if (LineStruct.Group == LastUser.Groupname) GroupID = LastGroupID;
+		else PWSR_LookupGroupname("/", LineStruct.Group, &GroupID);
+		
+		LastGroupID = GroupID;
+		LastGroupText = LineStruct.Group;
+		
+		const char *ActualPath = LineStruct.Path;
 		
 		//Incoming path.
-		snprintf(Path1, sizeof Path1, "%s/%s", InputDir, ActualPath);
-		//Outgoing path.
-		snprintf(Path2, sizeof Path2, "%s/%s", PackageDir, ActualPath);
+		const PkString Path1 = PkString(InputDir) + "/" + ActualPath;
 		
-		if (*Line == 'd')
+		//Outgoing path.		
+		const PkString Path2 = PkString(PackageDir) + "/" + ActualPath;
+		
+		switch (LineStruct.Type)
 		{
-			Files_Mkdir(Path1, Path2);
-		}
-		else if (*Line == 'f')
-		{
-			if (lstat(Path1, &FileStat) != 0)
+			case Utils::FileListLine::FLLTYPE_DIRECTORY:
 			{
-				free(Buffer);
-				puts("File stat failure");
-				return false;
+				Files_Mkdir(Path1, Path2, NULL, User.UserID, GroupID, LineStruct.Mode);
+				break;
 			}
-			
-			if (S_ISLNK(FileStat.st_mode))
+			case Utils::FileListLine::FLLTYPE_FILE:
 			{
-				Files_SymlinkCopy(Path1, Path2, false);
+				if (lstat(Path1, &FileStat) != 0)
+				{
+					puts("File stat failure");
+					return false;
+				}
+				
+				if (S_ISLNK(FileStat.st_mode))
+				{
+					Files_SymlinkCopy(Path1, Path2, false, NULL, User.UserID, GroupID);
+				}
+				else
+				{
+					Files_FileCopy(Path1, Path2, false, NULL, User.UserID, GroupID, LineStruct.Mode);
+				}
+				break;
 			}
-			else
-			{
-				Files_FileCopy(Path1, Path2, false);
-			}
+			default:
+				break;
 		}
 	}
-	free(Buffer);
 	return true;
 }
 
@@ -544,35 +591,37 @@ static bool Package_MakeAllChecksums(const char *Directory, const char *FileList
 	}
 	
 	char LineBuf[4096];
-	char PathBuf[4096];
 	
+	*LineBuf = 0;
 	const char *Iter = FileData;
-	
-	char Checksum[4096];
-	
 	
 	//Iterate over the items in the file list.
 	while (SubStrings.Line.GetLine(LineBuf, sizeof LineBuf, &Iter))
 	{
-		if (*LineBuf == 'd') continue; //We don't deal with directories.
+		if (!*LineBuf) continue;
 		
-		const char *LineData = LineBuf + (sizeof "f " - 1);
-
-		snprintf(PathBuf, sizeof PathBuf, "%s/%s", Directory, LineData);
+		Utils::FileListLine LineStruct = Utils::BreakdownFileListLine(LineBuf);
+		
+		if (LineStruct.Type == Utils::FileListLine::FLLTYPE_DIRECTORY) continue;
+		
+		PkString PathBuf = PkString(Directory) + "/" + LineStruct.Path;
+		
 		
 		struct stat TempStat;
 		if (lstat(PathBuf, &TempStat) != 0 || S_ISLNK(TempStat.st_mode)) continue;
 		
+		PkString Checksum = Package_MakeFileChecksum(PathBuf);
+		
 		//Build the checksum.
-		if (!Package_MakeFileChecksum(PathBuf, Checksum, sizeof Checksum))
+		if (!Checksum)
 		{
 			return false;
 		}
 		
 		//Write the checksum to the output file.
-		fwrite(Checksum, 1, strlen(Checksum), OutDesc);
+		fwrite(Checksum, 1, Checksum.length(), OutDesc);
 		fputc(' ', OutDesc);
-		fwrite(LineData, 1, strlen(LineData), OutDesc);
+		fwrite(LineStruct.Path, 1, LineStruct.Path.length(), OutDesc);
 		fputc('\n', OutDesc);
 	}
 	
@@ -580,22 +629,20 @@ static bool Package_MakeAllChecksums(const char *Directory, const char *FileList
 }
 	
 	
-bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize)
+PkString Package_MakeFileChecksum(const char *FilePath)
 { //Fairly fast function to get a sha1 of a file.
-	if (OutStreamSize < 4096) return false;
-	
 	unsigned char Hash[SHA_DIGEST_LENGTH];
 	
 	struct stat FileStat;
 	
 	if (stat(FilePath, &FileStat) != 0)
 	{
-		return false;
+		return PkString();
 	}
 	
 	FILE *Descriptor = fopen(FilePath, "rb");
 	
-	if (!Descriptor) return false;
+	if (!Descriptor) return PkString();
 	
 	SHA_CTX CTX;
 	
@@ -609,22 +656,23 @@ bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned Ou
 	{
 		Read = fread(ReadBuf, 1, SizeToRead, Descriptor);
 		if (Read) SHA1_Update(&CTX, ReadBuf, Read);
-	} while(Read > 0);
+	} while (Read > 0);
 	
 	free(ReadBuf);
 	fclose(Descriptor);
 	
 	SHA1_Final(Hash, &CTX);
 	
-	*OutStream = '\0';
+	char Buf[4096] = { 0 };
+	
 	unsigned Inc = 0;
 	for (; Inc < SHA_DIGEST_LENGTH ; ++Inc)
 	{
-		const unsigned Len = strlen(OutStream);
-		snprintf(OutStream + Len, OutStreamSize - Len, "%02x", Hash[Inc]);
+		const unsigned Len = strlen(Buf);
+		snprintf(Buf + Len, sizeof Buf - Len, "%02x", Hash[Inc]);
 	}
 	
-	return true;
+	return Buf;
 }
 
 bool Package_VerifyChecksums(const char *PackageDir)
@@ -680,9 +728,7 @@ bool Package_VerifyChecksums(const char *PackageDir)
 			return false;
 		}
 		
-		char NewChecksum[4096];
-		
-		Package_MakeFileChecksum(Path, NewChecksum, sizeof NewChecksum);
+		PkString NewChecksum = Package_MakeFileChecksum(Path);
 		
 		if (!SubStrings.Compare(NewChecksum, Checksum))
 		{
@@ -698,7 +744,7 @@ bool Package_VerifyChecksums(const char *PackageDir)
 }
 		
 	
-static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath)
+static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath, const char *Sysroot)
 {
 	struct dirent *File = NULL;
 	DIR *CurDir = NULL;
@@ -721,6 +767,11 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 	
 	char OutStream[4096];
 	char NewPath[4096], AbsPath[4096];
+	
+	PasswdUser LastUser;
+	gid_t LastGroupID = 0;
+	PkString LastGroup;
+	
 	while ((File = readdir(CurDir)))
 	{
 		if (!strcmp(File->d_name, ".") || !strcmp(File->d_name, "..")) continue;
@@ -737,8 +788,13 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		if (S_ISDIR(FileStat.st_mode))
 		{ //It's a directory.
 			
-			PasswdUser User = PWSR_LookupUserID("/", FileStat.st_uid);
-			PkString Group = PWSR_LookupGroupID("/", FileStat.st_gid);
+			PasswdUser User = FileStat.st_uid != LastUser.UserID ? PWSR_LookupUserID("/", FileStat.st_uid) : LastUser;
+			PkString Group = FileStat.st_gid != LastGroupID ? PWSR_LookupGroupID("/", FileStat.st_gid) : LastGroup;
+			
+			//We do this stuff for optimization. Should make a big difference.
+			LastUser = User;
+			LastGroup = Group;
+			LastGroupID = FileStat.st_gid;
 			
 			snprintf(OutStream, sizeof OutStream, "d %s:%s:%o %s\n", +User.Username, +Group, FileStat.st_mode, NewPath);
 			fwrite(OutStream, 1, strlen(OutStream), OutDesc); //Write the directory name.
@@ -760,8 +816,13 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		}
 		//It's a file.
 		
-		PasswdUser User = PWSR_LookupUserID("/", FileStat.st_uid);
-		PkString Group = PWSR_LookupGroupID("/", FileStat.st_gid);
+		PasswdUser User = FileStat.st_uid != LastUser.UserID ? PWSR_LookupUserID("/", FileStat.st_uid) : LastUser;
+		PkString Group = FileStat.st_gid != LastGroupID ? PWSR_LookupGroupID("/", FileStat.st_gid) : LastGroup;
+		
+		//Optimization stuff so we don't look through /etc/passwd and /etc/group for every file.
+		LastUser = User;
+		LastGroup = Group;
+		LastGroupID = FileStat.st_gid;
 		
 		snprintf(OutStream, sizeof OutStream, "f %s:%s:%o %s\n", +User.Username, +Group, FileStat.st_mode, NewPath);
 		fwrite(OutStream, 1, strlen(OutStream), OutDesc); 

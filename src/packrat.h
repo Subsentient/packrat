@@ -38,21 +38,17 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 struct PkString : public std::string
 { //Wrapper to make std::string more friendly.
-	operator bool			(void) const 	{ return this->empty(); }
+	operator bool			(void) const 	{ return !this->empty(); }
 	operator const char *	(void) const 	{ return this->c_str(); }
 	const char *operator+	(void) const 	{ return this->c_str(); }
 	char operator *			(void) const 	{ return *this->c_str(); }
 	
 	//We need these so we can still use our other overloads in expressions with temporaries.
-	PkString operator+ (const PkString &Ref) const
-	{
-		return static_cast<const std::string&>(*this) + +Ref;
-	}
-	PkString operator+ (const char *In) const
-	{
-		return static_cast<const std::string&>(*this) + In;
-	}
-	PkString(const char *Stringy) : std::string(Stringy) {}
+	PkString operator+	(const PkString &Ref) 	const	{ return static_cast<const std::string&>(*this) + +Ref; }
+	PkString operator+	(const char *In) 		const 	{ return static_cast<const std::string&>(*this) + In; }
+	PkString operator+	(const char Character) 	const 	{ return static_cast<const std::string&>(*this) + Character; }
+	
+	PkString(const char *Stringy) : std::string(Stringy ? Stringy : "") {}
 	PkString(const std::string &Stringy) : std::string(Stringy) {}
 	PkString(void) : std::string() {}
 };
@@ -115,7 +111,7 @@ bool Config_LoadConfig(const char *Sysroot);
 //package.cpp
 bool Package_ExtractPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize);
 bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
-bool Package_MakeFileChecksum(const char *FilePath, char *OutStream, unsigned OutStreamSize);
+PkString Package_MakeFileChecksum(const char *FilePath);
 bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf);
 bool Package_UpdateFiles(const char *PackageDir, const char *Sysroot, const char *OldFileListBuf, const char *NewFileListBuf);
 bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath);
@@ -126,9 +122,9 @@ bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, c
 bool Package_CompressPackage(const char *PackageTempDir, const char *OutFile);
 
 //files.cpp
-bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite);
-bool Files_Mkdir(const char *Source, const char *Destination);
-bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite);
+bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode);
+bool Files_Mkdir(const char *Source, const char *Destination, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode);
+bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite, const PkString &Sysroot , const uid_t UserID, const gid_t GroupID);
 bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut);
 struct FileAttributes Files_GetDefaultAttributes(void);
 

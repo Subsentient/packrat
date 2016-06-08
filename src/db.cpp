@@ -473,8 +473,6 @@ bool DB_Disk_LoadDB(const char *Sysroot)
 		return false;
 	}
 	
-
-	
 	while ((File = readdir(CurDir)))
 	{
 		//Ignore . and ..
@@ -529,8 +527,7 @@ bool DB_Disk_DeletePackage(const char *PackageID, const char *Arch, const char *
 }
 
 bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot)
-{
-	char Path[4096];
+{	
 	
 	//Get metadata.
 	struct Package Pkg;
@@ -538,7 +535,7 @@ bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot)
 	if (!DB_Disk_GetMetadata(InInfoDir, &Pkg)) return false;
 	
 	//Build path for the package.
-	snprintf(Path, sizeof Path, "%s/" DB_PATH "%s.%s", Sysroot, +Pkg.PackageID, +Pkg.Arch);
+	PkString Path = PkString(Sysroot) + '/' + DB_PATH + '/' + Pkg.PackageID + '.' + Pkg.Arch;
 	
 	struct stat DirStat;
 	
@@ -548,29 +545,25 @@ bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot)
 		return false;
 	}
 	
+	bool RetVal = false;
 	//Change directory.
-	if (chdir(Path) != 0) return false;
-	
-	
+	if (chdir(Path) != 0) goto Return;
+
 	///File list
 	//Build path for incoming file.
-	snprintf(Path, sizeof Path, "%s/filelist.txt", InInfoDir);
 
-	
-	
 	//We overwrite an earlier version.
-	if (!Files_FileCopy(Path, "filelist.txt", true)) return false;
+	if (!Files_FileCopy(PkString(InInfoDir) + "/filelist.txt", "filelist.txt", true, NULL, getuid(), getgid(), 0644)) goto Return;
 	
 	///Metadata
-	snprintf(Path, sizeof Path, "%s/metadata.txt", InInfoDir);
 	
-	if (!Files_FileCopy(Path, "metadata.txt", true)) return false;
+	if (!Files_FileCopy(PkString(InInfoDir) + "/metadata.txt", "metadata.txt", true, NULL, getuid(), getgid(), 0644)) goto Return;
 	
 	///Checksums
-	snprintf(Path, sizeof Path, "%s/checksums.txt", InInfoDir);
+	if (!Files_FileCopy(PkString(InInfoDir) + "/checksums.txt", "checksums.txt", true, NULL, getuid(), getgid(), 0644)) goto Return;
 	
-	if (!Files_FileCopy(Path, "checksums.txt", true)) return false;
-	
-	return true;
+	RetVal = true;
+Return:
+	return RetVal;
 }
 

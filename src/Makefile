@@ -1,8 +1,8 @@
 
 CC=gcc
 CXX=g++
-CXXFLAGS=-std=gnu++98 -pedantic -Wall -g3 -Og -ftrapv -fstrict-aliasing -Wstrict-aliasing
-CFLAGS=-std=gnu99 -pedantic -Wall -g -Og -ftrapv -fstrict-aliasing -Wstrict-aliasing
+CXXFLAGS=-std=gnu++98 -pedantic -Wall -g3 -O0 -ftrapv -fstrict-aliasing -Wstrict-aliasing -Wno-long-long
+CFLAGS=-std=gnu99 -pedantic -Wall -g -O3 -ftrapv -fstrict-aliasing -Wstrict-aliasing
 LDFLAGS=-lcrypto substrings/libsubstrings.a
 
 all: config action main package db files pwsr
