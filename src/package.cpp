@@ -36,14 +36,13 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc);
 static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList);
 	
-bool Package_ExtractPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize)
+bool Package_MountPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize)
 {	
-	if (!Action_CreateTempCacheDir(PkgDirPath, sizeof PkgDirPathSize, Sysroot))
+	if (!Action_CreateTempCacheDir(PkgDirPath, PkgDirPathSize, Sysroot))
 	{
 		return false;
 	}
-	PkString Derp;
-	
+
 	pid_t PID = fork();
 	if (PID == -1)
 	{

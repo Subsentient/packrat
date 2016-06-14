@@ -69,14 +69,27 @@ struct PasswdUser
 	operator bool(void) const { return *Username; }
 };
 
+
+struct Dependency
+{
+	PkString PackageID; //cannot be null
+	PkString MinimumVersion; //Can be null
+	PkString Arch; //if empty, assume same as 'calling' package.
+};
+
 struct Package
 {
+	struct FailedDepsResolve { PkString PackageID; FailedDepsResolve(const PkString &In = "") : PackageID(In) {} };
 	unsigned PackageGeneration; //The build number of this package, so we can fix busted packages of the same version of software.
 
 	PkString PackageID; //name of the package.
 	PkString VersionString; //complete version of the software we're dealing with
 	PkString Description; //A brief summary of the package contents, optional**
 	PkString Arch; //Package architecture
+	std::vector<struct Dependency> Dependencies; //Self-explanitory.
+	
+	std::vector<PkString> Replaces, Conflicts; //First is for stuff we resolve by overwriting, second is an error.
+	
 	struct
 	{ //Commands executed at various stages of the install process.
 		PkString PreInstall;
@@ -86,6 +99,43 @@ struct Package
 		PkString PreUpdate;
 		PkString PostUpdate;
 	} Cmds;
+	
+	void AddDependency(const PkString &InPackageID, const PkString &MinimumVersion, const PkString &Arch)
+	{
+		this->Dependencies.push_back(Dependency());
+		struct Dependency &Ref = this->Dependencies.back();
+		
+		Ref.PackageID = InPackageID;
+		Ref.MinimumVersion = MinimumVersion;
+		Ref.Arch = Arch;
+	}
+	
+	struct Dependency *GetDependency(const PkString &InPackageID) const
+	{
+		const Dependency *Worker = &this->Dependencies[0];
+		const Dependency *Stopper = Worker + this->Dependencies.size(); //We're allowed to refer one past the last element in an aggregate.
+		
+		for (; Worker != Stopper; ++Worker)
+		{
+			if (Worker->PackageID == InPackageID) return const_cast<Dependency*>(Worker);
+		}
+		
+		return NULL;
+	}
+	bool DeleteDependency(const PkString &InPackageID)
+	{ //Expensive obviously, avoid this.
+		std::vector<Dependency>::iterator Iter = this->Dependencies.begin();
+		
+		for (; Iter != this->Dependencies.end(); ++Iter)
+		{
+			if (Iter->PackageID == InPackageID)
+			{
+				this->Dependencies.erase(Iter);
+				return true;
+			}
+		}
+		return true;
+	}
 };
 
 struct PackageList
@@ -109,7 +159,7 @@ bool Config_ArchPresent(const char *CheckArch);
 bool Config_LoadConfig(const char *Sysroot);
 
 //package.cpp
-bool Package_ExtractPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize);
+bool Package_MountPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize);
 bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
 PkString Package_MakeFileChecksum(const char *FilePath);
 bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf);
@@ -147,6 +197,10 @@ struct PasswdUser PWSR_LookupUsername(const char *Sysroot, const char *Username)
 bool PWSR_LookupGroupname(const char *Sysroot, const char *Groupname, gid_t *OutGID);
 struct PasswdUser PWSR_LookupUserID(const char *Sysroot, const uid_t UID);
 PkString PWSR_LookupGroupID(const char *Sysroot, const gid_t GID);
+
+//web.cpp
+bool Web_Fetch(const PkString &URL, const PkString &OutPath);
+PkString Web_Fetch(const PkString &URL);
 
 //Globals
 extern struct PackageList *DBCore[DBCORE_SIZE];

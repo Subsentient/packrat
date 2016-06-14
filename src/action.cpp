@@ -226,10 +226,10 @@ bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
-	puts("Extracting package...");
-	if (!Package_ExtractPackage(PkgPath, Sysroot, Path, sizeof Path))
+	puts("Mounting package...");
+	if (!Package_MountPackage(PkgPath, Sysroot, Path, sizeof Path))
 	{
-		fputs("ERROR: Failed to extract package to temporary directory!\n", stderr);
+		fputs("ERROR: Failed to mount package to temporary directory!\n", stderr);
 		DB_Shutdown();
 		
 		return false;
@@ -355,7 +355,7 @@ bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot)
 bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 {
 	
-	char Path[4096]; //Will contain a value from Package_ExtractPackage()
+	char Path[4096]; //Will contain a value from Package_MountPackage()
 	
 	//Load configuration.
 	if (!Config_LoadConfig(Sysroot))
@@ -371,12 +371,12 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
-	puts("Extracting package...");
+	puts("Mounting package...");
 	
 	//Extract the pkrt file into a temporary directory, which is given back to us in Path.
-	if (!Package_ExtractPackage(PkgPath, Sysroot, Path, sizeof Path))
+	if (!Package_MountPackage(PkgPath, Sysroot, Path, sizeof Path))
 	{
-		fputs("ERROR: Failed to extract package to temporary directory!\n", stderr);
+		fputs("ERROR: Failed to mount package to temporary directory!\n", stderr);
 		DB_Shutdown();
 		return false;
 	}

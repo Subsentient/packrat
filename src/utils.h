@@ -23,6 +23,8 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "packrat.h"
 #endif //_PACKRAT_H_
 
+#include <string.h>
+
 #include "substrings/substrings.h" //Has header guards, don't worry.
 namespace Utils
 {
@@ -147,5 +149,6 @@ static inline std::list<PkString> *Utils::LinesToLinkedList(const char *FileStre
 	
 	return New;
 }
+
 
 #endif //__PKRT_UTILS_H__

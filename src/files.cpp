@@ -113,7 +113,7 @@ bool Files_SymlinkCopy(const char *Source, const char *Destination_, bool Overwr
 	return true;
 }
 
-bool Files_FileCopy(const char *Source, const char *Destination_, bool Overwrite, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode)
+bool Files_FileCopy(const char *Source, const char *Destination_, const bool Overwrite, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode)
 { //Copies a file preserving its permissions.
 	FILE *In = fopen(Source, "rb");
 
