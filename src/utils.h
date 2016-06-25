@@ -41,6 +41,7 @@ namespace Utils
 	};
 	class FileSize_Error {};
 	static inline PkString Slurp(const char *Path, const char *Sysroot = NULL) throw(Utils::SlurpFailure);
+	static inline bool WriteFile(const PkString &Filename, const char *Data, const size_t DataSize, const bool Append, const signed Permissions = -1);
 	static inline size_t FileSize(const char *Path, const char *Sysroot = NULL);
 	static inline FileListLine BreakdownFileListLine(const PkString &Line);
 	static inline std::list<PkString> *LinesToLinkedList(const char *FileStream);
@@ -150,5 +151,24 @@ static inline std::list<PkString> *Utils::LinesToLinkedList(const char *FileStre
 	return New;
 }
 
+static inline bool Utils::WriteFile(const PkString &Filename, const char *Data, const size_t DataSize, const bool Append, const signed Permissions)
+{
+	if (!Filename) return false;
+	
+	FILE *Desc = fopen(Filename, Append ? "ab" : "wb");
+	
+	if (!Desc) return false;
+	
+	//Useful for wiping files this way
+	if (Data && DataSize) fwrite(Data, 1, DataSize, Desc);
+	
+	fclose(Desc);
+	
+	if (Permissions != -1)
+	{
+		chmod(Filename, *(unsigned*)&Permissions);
+	}
+	return true;
+}
 
 #endif //__PKRT_UTILS_H__

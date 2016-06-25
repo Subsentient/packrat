@@ -156,7 +156,7 @@ bool Files_FileCopy(const char *Source, const char *Destination_, const bool Ove
 	}
 	
 	//Do the copy.
-	const unsigned SizeToRead = 1024 * 1024; //1MB
+	const unsigned SizeToRead = 1024 * 1024 * 5; //5MB chunks, for speed.
 	unsigned AmountRead = 0;
 	char *ReadBuf = (char*)malloc(SizeToRead);
 	do

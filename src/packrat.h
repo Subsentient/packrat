@@ -30,9 +30,9 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <set>
 
 #define CONFIGFILE_PATH "/etc/packrat.conf"
-#define DB_PATH "/var/packrat/pkgdb/"
-#define DBCORE_SIZE ((('z'-'a')+1) + (('9'-'0')+1))
-
+#define DB_DIRECTORY "/var/packrat/pkgdb/"
+#define DB_TAGS_PATH DB_DIRECTORY "tags/"
+#define DB_MAIN_PATH DB_DIRECTORY "installed.db"
 //Structs
 
 
@@ -46,9 +46,12 @@ struct PkString : public std::string
 	//We need these so we can still use our other overloads in expressions with temporaries.
 	PkString operator+	(const PkString &Ref) 	const	{ return static_cast<const std::string&>(*this) + +Ref; }
 	PkString operator+	(const char *In) 		const 	{ return static_cast<const std::string&>(*this) + In; }
+	PkString operator+	(char *In) 				const 	{ return static_cast<const std::string&>(*this) + In; }
+	PkString operator+	(const unsigned char*In)const 	{ return static_cast<const std::string&>(*this) + (const char*)In; }
 	PkString operator+	(const char Character) 	const 	{ return static_cast<const std::string&>(*this) + Character; }
 	
 	PkString(const char *Stringy) : std::string(Stringy ? Stringy : "") {}
+	PkString(const unsigned char *Stringy) : std::string(Stringy ? (const char*)Stringy : "") {}
 	PkString(const std::string &Stringy) : std::string(Stringy) {}
 	PkString(void) : std::string() {}
 };
@@ -69,26 +72,14 @@ struct PasswdUser
 	operator bool(void) const { return *Username; }
 };
 
-
-struct Dependency
-{
-	PkString PackageID; //cannot be null
-	PkString MinimumVersion; //Can be null
-	PkString Arch; //if empty, assume same as 'calling' package.
-};
-
 struct Package
 {
-	struct FailedDepsResolve { PkString PackageID; FailedDepsResolve(const PkString &In = "") : PackageID(In) {} };
 	unsigned PackageGeneration; //The build number of this package, so we can fix busted packages of the same version of software.
 
 	PkString PackageID; //name of the package.
 	PkString VersionString; //complete version of the software we're dealing with
 	PkString Description; //A brief summary of the package contents, optional**
 	PkString Arch; //Package architecture
-	std::vector<struct Dependency> Dependencies; //Self-explanitory.
-	
-	std::vector<PkString> Replaces, Conflicts; //First is for stuff we resolve by overwriting, second is an error.
 	
 	struct
 	{ //Commands executed at various stages of the install process.
@@ -99,51 +90,6 @@ struct Package
 		PkString PreUpdate;
 		PkString PostUpdate;
 	} Cmds;
-	
-	void AddDependency(const PkString &InPackageID, const PkString &MinimumVersion, const PkString &Arch)
-	{
-		this->Dependencies.push_back(Dependency());
-		struct Dependency &Ref = this->Dependencies.back();
-		
-		Ref.PackageID = InPackageID;
-		Ref.MinimumVersion = MinimumVersion;
-		Ref.Arch = Arch;
-	}
-	
-	struct Dependency *GetDependency(const PkString &InPackageID) const
-	{
-		const Dependency *Worker = &this->Dependencies[0];
-		const Dependency *Stopper = Worker + this->Dependencies.size(); //We're allowed to refer one past the last element in an aggregate.
-		
-		for (; Worker != Stopper; ++Worker)
-		{
-			if (Worker->PackageID == InPackageID) return const_cast<Dependency*>(Worker);
-		}
-		
-		return NULL;
-	}
-	bool DeleteDependency(const PkString &InPackageID)
-	{ //Expensive obviously, avoid this.
-		std::vector<Dependency>::iterator Iter = this->Dependencies.begin();
-		
-		for (; Iter != this->Dependencies.end(); ++Iter)
-		{
-			if (Iter->PackageID == InPackageID)
-			{
-				this->Dependencies.erase(Iter);
-				return true;
-			}
-		}
-		return true;
-	}
-};
-
-struct PackageList
-{	
-	struct Package Pkg;
-	struct PackageList *Prev;
-	struct PackageList *Next;
-
 };
 
 #include "utils.h"
@@ -167,31 +113,26 @@ bool Package_UpdateFiles(const char *PackageDir, const char *Sysroot, const char
 bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath);
 bool Package_UninstallFiles(const char *Sysroot, const char *FileListBuf);
 bool Package_CreatePackage(const struct Package *Job, const char *Directory);
-bool Package_VerifyChecksums(const char *PackageDir);
+bool Package_VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDir);
 bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, const char *FileListBuf);
 bool Package_CompressPackage(const char *PackageTempDir, const char *OutFile);
+bool Package_GetMetadata(const char *Path, struct Package *OutPkg);
+const char *Package_GetFileList(const char *InfoDir);
+
 
 //files.cpp
 bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode);
 bool Files_Mkdir(const char *Source, const char *Destination, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode);
 bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite, const PkString &Sysroot , const uid_t UserID, const gid_t GroupID);
 bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut);
-struct FileAttributes Files_GetDefaultAttributes(void);
 
 //db.cpp
-const char *DB_Disk_GetChecksums(const char *PackageID, const char *Sysroot);
-const char *DB_Disk_GetFileList(const char *PackageID, const char *Arch, const char *Sysroot);
-const char *DB_Disk_GetFileListDyn(const char *InfoDir);
-bool DB_Disk_GetMetadata(const char *Path, struct Package *OutPkg);
-bool DB_Disk_LoadDB(const char *Sysroot);
-struct PackageList *DB_Add(const struct Package *Pkg);
-bool DB_Delete(const char *PackageID, const char *Arch);
-void DB_Shutdown(void);
-bool DB_Disk_DeletePackage(const char *PackageID, const char *Arch, const char *Sysroot);
-bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot);
-struct PackageList *DB_Lookup(const char *PackageID, const char *Arch);
-bool DB_HasMultiArches(const char *PackageID);
-
+bool DB_LoadPackage(const PkString &PackageID, const PkString &Arch, Package *Out, const PkString &Sysroot = "/");
+bool DB_SavePackage(const Package &Pkg, const PkString &FileListPath, const PkString &ChecksumsPath, const PkString &Sysroot = "/");
+bool DB_DeletePackage(const PkString &PackageID, const PkString &Arch, const PkString &Sysroot = "/");
+bool DB_InitializeEmptyDB(const PkString &Sysroot = "/");
+bool DB_GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *OutFileList, PkString *OutChecksums, const PkString &Sysroot = "/");
+bool DB_HasMultiArches(const char *PackageID, const PkString &Sysroot);
 //passwd_w_sysroot.cpp
 struct PasswdUser PWSR_LookupUsername(const char *Sysroot, const char *Username);
 bool PWSR_LookupGroupname(const char *Sysroot, const char *Groupname, gid_t *OutGID);
@@ -203,6 +144,4 @@ bool Web_Fetch(const PkString &URL, const PkString &OutPath);
 PkString Web_Fetch(const PkString &URL);
 
 //Globals
-extern struct PackageList *DBCore[DBCORE_SIZE];
-
 #endif //_PACKRAT_H_

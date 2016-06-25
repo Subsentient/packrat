@@ -25,545 +25,379 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <ctype.h>
 #include "packrat.h"
 #include "substrings/substrings.h"
+#include "sqlite3/sqlite3.h"
 
-//Static functions
-static bool DB_Disk_LoadPackage(const char *Path);
-static struct PackageList **DB_GetListByAlpha(const char StartingCharacter);
 
-//Globals
-struct PackageList *DBCore[DBCORE_SIZE];
+//This is an array so I can use sizeof instead of strlen
+static const char InstalledDBSchema[] = "create table installed (\n"
+										"PackageID text not null,\n"
+										"Arch text not null,\n"
+										"VersionString text not null,\n"
+										"PackageGeneration int default 0,\n"
+										"Description text default \"No description provided\",\n"
+										"PreInstall text,\n"
+										"PostInstall text,\n"
+										"PreUninstall text,\n"
+										"PostUninstall text,\n"
+										"PreUpdate text,\n"
+										"PostUpdate text,\n"
+										"FileList text,"
+										"Checksums text);";
 
-static struct PackageList **DB_GetListByAlpha(const char StartingCharacter)
+//Prototypes
+static bool ProcessColumn(sqlite3_stmt *Statement, Package *Pkg, const int Index);
+
+//Function definitions
+static bool ProcessColumn(sqlite3_stmt *Statement, Package *Pkg, const int Index)
 {
-	if (!isalnum(StartingCharacter)) return NULL;
+	const PkString &Name = sqlite3_column_name(Statement, Index);
 	
-	const char Char = tolower(StartingCharacter);
-	
-	if (isalpha(Char)) return DBCore + ((Char-'a'));
-	else return DBCore + ((('z'-'a')+1) + ((Char-'0')));
-}
-	
-	
-	
-	
-struct PackageList *DB_Lookup(const char *PackageID, const char *Arch)
-{
-	struct PackageList **List = DB_GetListByAlpha(*PackageID);
-	
-	if (!*List) return NULL;
-	
-	struct PackageList *Worker = *List;
-	
-	for (; Worker; Worker = Worker->Next)
+	if 		(Name == "PackageID")
 	{
-		if (!strcmp(Worker->Pkg.PackageID, PackageID) && Arch ? !strcmp(Arch, Worker->Pkg.Arch) : true) return Worker;
+		Pkg->PackageID = sqlite3_column_text(Statement, Index);
+	}
+	else if (Name == "Arch")
+	{
+		Pkg->Arch = sqlite3_column_text(Statement, Index);
+	}
+	else if (Name == "VersionString")
+	{
+		Pkg->VersionString = sqlite3_column_text(Statement, Index);
+	}
+	else if (Name == "PackageGeneration")
+	{
+		Pkg->PackageGeneration = sqlite3_column_type(Statement, Index) == SQLITE_NULL ? 0 : sqlite3_column_int(Statement, Index);
+	}
+	else if (Name == "Description")
+	{
+		Pkg->Description = sqlite3_column_type(Statement, Index) == SQLITE_NULL ? "" : (const char*)sqlite3_column_text(Statement, Index);
+	}
+	else if (Name == "PreInstall")
+	{
+		Pkg->Cmds.PreInstall = sqlite3_column_type(Statement, Index) == SQLITE_NULL ? "" : (const char*)sqlite3_column_text(Statement, Index);
+	}
+	else if (Name == "PostInstall")
+	{
+		Pkg->Cmds.PostInstall = sqlite3_column_type(Statement, Index) == SQLITE_NULL ? "" : (const char*)sqlite3_column_text(Statement, Index);
+	}
+	else if (Name == "PreUninstall")
+	{
+		Pkg->Cmds.PreUninstall = sqlite3_column_type(Statement, Index) == SQLITE_NULL ? "" : (const char*)sqlite3_column_text(Statement, Index);
+	}
+	else if (Name == "PostUninstall")
+	{
+		Pkg->Cmds.PostUninstall = sqlite3_column_type(Statement, Index) == SQLITE_NULL ? "" : (const char*)sqlite3_column_text(Statement, Index);
+	}
+	else if (Name == "PreUpdate")
+	{
+		Pkg->Cmds.PreUpdate = sqlite3_column_type(Statement, Index) == SQLITE_NULL ? "" : (const char*)sqlite3_column_text(Statement, Index);
+	}
+	else if (Name == "PostUpdate")
+	{
+		Pkg->Cmds.PostUpdate = sqlite3_column_type(Statement, Index) == SQLITE_NULL ? "" : (const char*)sqlite3_column_text(Statement, Index);
 	}
 	
-	return NULL;
+	return true;
 }
 
-bool DB_HasMultiArches(const char *PackageID)
-{ //Checks if there are two of the same package, assumedly with different architectures.
-	struct PackageList **List = DB_GetListByAlpha(*PackageID);
-	
-	if (!*List) return false;
-	
-	
-	struct PackageList *Found = NULL, *Worker = *List;
-	
-	for (; Worker; Worker = Worker->Next)
+bool DB_SavePackage(const Package &Pkg, const PkString &FileListPath, const PkString &ChecksumsPath, const PkString &Sysroot)
+{
+	sqlite3 *Handle = NULL;
+
+	PkString FileListBuf, ChecksumsBuf;
+	try
 	{
-		if (!strcmp(PackageID, Worker->Pkg.PackageID))
+		FileListBuf = Utils::Slurp(FileListPath);
+		ChecksumsBuf = Utils::Slurp(ChecksumsBuf);
+	}
+	catch (...)
+	{
+		return false;
+	}
+	
+	if (sqlite3_open(Sysroot + DB_DIRECTORY DB_MAIN_PATH, &Handle) != SQLITE_OK)
+	{
+		return false;
+	}
+
+	const PkString &SQL = PkString() + "delete from installed where PackageID='" + Pkg.PackageID + "' and Arch='" + Pkg.Arch + "'; "
+					"insert into installed (PackageID, Arch, VersionString, PackageGeneration, Description, PreInstall, PostInstall,"
+					"PreUninstall, PostUninstall, PreUpdate, PostUpdate) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+	sqlite3_stmt *Statement = NULL;
+	const char *Tail = NULL;
+
+	if (sqlite3_prepare(Handle, SQL, SQL.size(), &Statement, &Tail) != SQLITE_OK)
+	{
+		sqlite3_close(Handle);
+		return false;
+	}
+
+	int Indice = 1;
+	
+	sqlite3_bind_text(Statement, Indice++, Pkg.PackageID, Pkg.PackageID.size(), SQLITE_STATIC);
+	sqlite3_bind_text(Statement, Indice++, Pkg.Arch, Pkg.Arch.size(), SQLITE_STATIC);
+	sqlite3_bind_text(Statement, Indice++, Pkg.VersionString, Pkg.VersionString.size(), SQLITE_STATIC);
+	sqlite3_bind_int(Statement, Indice++, Pkg.PackageGeneration);
+
+	Pkg.Description ? sqlite3_bind_text(Statement, Indice++, Pkg.Description, Pkg.Description.size(), SQLITE_STATIC)
+					: sqlite3_bind_null(Statement, Indice++);
+
+	Pkg.Cmds.PreInstall ? sqlite3_bind_text(Statement, Indice++, Pkg.Cmds.PreInstall, Pkg.Cmds.PreInstall.size(), SQLITE_STATIC)
+						: sqlite3_bind_null(Statement, Indice++);
+
+	Pkg.Cmds.PostInstall ? sqlite3_bind_text(Statement, Indice++, Pkg.Cmds.PostInstall, Pkg.Cmds.PostInstall.size(), SQLITE_STATIC)
+						: sqlite3_bind_null(Statement, Indice++);
+
+	Pkg.Cmds.PreUninstall ? sqlite3_bind_text(Statement, Indice++, Pkg.Cmds.PreUninstall, Pkg.Cmds.PreUninstall.size(), SQLITE_STATIC)
+						: sqlite3_bind_null(Statement, Indice++);
+
+	Pkg.Cmds.PostUninstall ? sqlite3_bind_text(Statement, Indice++, Pkg.Cmds.PostUninstall, Pkg.Cmds.PostUninstall.size(), SQLITE_STATIC)
+						: sqlite3_bind_null(Statement, Indice++);
+
+	Pkg.Cmds.PreUpdate ? sqlite3_bind_text(Statement, Indice++, Pkg.Cmds.PreUpdate, Pkg.Cmds.PreUpdate.size(), SQLITE_STATIC)
+						: sqlite3_bind_null(Statement, Indice++);
+
+	Pkg.Cmds.PostUpdate ? sqlite3_bind_text(Statement, Indice++, Pkg.Cmds.PostUpdate, Pkg.Cmds.PostUpdate.size(), SQLITE_STATIC)
+						: sqlite3_bind_null(Statement, Indice++);
+	
+	sqlite3_bind_text(Statement, Indice++, FileListBuf, FileListBuf.size(), SQLITE_STATIC);
+	sqlite3_bind_text(Statement, Indice++, ChecksumsBuf, ChecksumsBuf.size(), SQLITE_STATIC);
+	
+	if (sqlite3_step(Statement) != SQLITE_DONE)
+	{
+		sqlite3_close(Handle);
+		return false;
+	}
+	
+	sqlite3_finalize(Statement);
+	sqlite3_close(Handle);
+	return true;
+}
+
+bool DB_DeletePackage(const PkString &PackageID, const PkString &Arch, const PkString &Sysroot)
+{
+	sqlite3 *Handle = NULL;
+
+	if (sqlite3_open(Sysroot + DB_DIRECTORY DB_MAIN_PATH, &Handle) != 0)
+	{
+		return false;
+	}
+
+	sqlite3_stmt *Statement = NULL;
+	const char *Tail = NULL;
+	
+	const PkString &SQL = "delete from installed where PackageID='" + PackageID + "' and Arch='" + Arch + "';";
+
+	if (sqlite3_prepare(Handle, SQL, SQL.size(), &Statement, &Tail) != SQLITE_OK)
+	{
+		sqlite3_close(Handle);
+		return false;
+	}
+
+	if (sqlite3_step(Statement) != SQLITE_DONE)
+	{
+		sqlite3_finalize(Statement);
+		sqlite3_close(Handle);
+		return false;
+	}
+
+	sqlite3_finalize(Statement);
+	sqlite3_close(Handle);
+
+	return true;
+}
+
+
+bool DB_GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *OutFileList, PkString *OutChecksums, const PkString &Sysroot)
+{ //Does NOT get the file list or checksums, but everything else.
+	if (!PackageID || !Arch || (!OutFileList && !OutChecksums)) return false; //Gotta be pretty fucktarded to deliberately do this.
+	
+	
+	sqlite3 *Handle = NULL;
+	
+	if (sqlite3_open(Sysroot + DB_DIRECTORY DB_MAIN_PATH, &Handle) != SQLITE_OK)
+	{
+		return false;
+	}
+	
+	const PkString &SQL = PkString() + "select FileList, Checksums from installed where PackageID='" + PackageID + "' and Arch='" + Arch + "';";
+	sqlite3_stmt *Statement = NULL;
+	const char *Tail = NULL;
+	
+	if (sqlite3_prepare(Handle, SQL, SQL.size(), &Statement, &Tail) != SQLITE_OK)
+	{
+		sqlite3_close(Handle);
+	}
+	
+	int Code = sqlite3_step(Statement);
+	
+	if (Code == SQLITE_DONE)
+	{ //Not found.
+		sqlite3_finalize(Statement);
+		sqlite3_close(Handle);
+		return false;
+	}
+	
+	if (Code != SQLITE_ROW)
+	{ //Possible other error.
+		sqlite3_close(Handle);
+		return false;
+	}
+	
+	if (OutFileList)
+	{
+		if (sqlite3_column_type(Statement, 0) == SQLITE_NULL)
 		{
-			Found = Worker;
+			return false;
+		}
+		
+		*OutFileList = sqlite3_column_text(Statement, 0);
+	}
+	
+	if (OutChecksums)
+	{
+		
+		if (sqlite3_column_type(Statement, 1) == SQLITE_NULL)
+		{
+			return false;
+		}
+		
+		*OutChecksums = sqlite3_column_text(Statement, 1);
+	}
+	
+	sqlite3_finalize(Statement);
+	sqlite3_close(Handle);
+	
+	return true;
+}
+
+
+bool DB_LoadPackage(const PkString &PackageID, const PkString &Arch, Package *Out, const PkString &Sysroot)
+{ //Does NOT get the file list or checksums, but everything else.
+	if (!PackageID || !Arch || !Out) return false; //Gotta be pretty fucktarded to deliberately do this.
+	
+	
+	sqlite3 *Handle = NULL;
+	
+	if (sqlite3_open(Sysroot + DB_DIRECTORY DB_MAIN_PATH, &Handle) != SQLITE_OK)
+	{
+		return false;
+	}
+	
+	const PkString &SQL = PkString() + "select PackageID, Arch, VersionString, PackageGeneration, "
+										"Description, PreInstall, PostInstall, PreUninstall, PostUninstall, PreUpdate, PostUpdate "
+										"from installed where PackageID='" + PackageID + "' and Arch='" + Arch + "' limit 1;";
+	sqlite3_stmt *Statement = NULL;
+	const char *Tail = NULL;
+	
+	if (sqlite3_prepare(Handle, SQL, SQL.size(), &Statement, &Tail) != SQLITE_OK)
+	{
+		sqlite3_close(Handle);
+	}
+	
+	int Code = sqlite3_step(Statement);
+	
+	if (Code == SQLITE_DONE)
+	{ //Not found.
+		sqlite3_finalize(Statement);
+		sqlite3_close(Handle);
+		return false;
+	}
+	
+	if (Code != SQLITE_ROW)
+	{ //Possible other error.
+		sqlite3_close(Handle);
+		return false;
+	}
+	
+	
+	///We're going to get the row data now.
+	const unsigned Columns = sqlite3_column_count(Statement);
+	
+	for (unsigned Inc = 0; Inc < Columns; ++Inc)
+	{
+		if (Out != NULL) ProcessColumn(Statement, Out, Inc); //We can use this to check for existence this way.
+	}
+	
+	sqlite3_finalize(Statement);
+	sqlite3_close(Handle);
+	
+	return true;
+}
+
+bool DB_InitializeEmptyDB(const PkString &Sysroot)
+{ //Wipe database and recreate as empty.
+	
+	//Wipe it and set permissions.
+	Utils::WriteFile(Sysroot + DB_DIRECTORY DB_MAIN_PATH, NULL, 0, false, 0664);
+	
+	sqlite3 *Handle = NULL;
+
+	if (sqlite3_open(Sysroot + DB_DIRECTORY DB_MAIN_PATH, &Handle) != 0)
+	{
+		return false;
+	}
+
+	sqlite3_stmt *Statement = NULL;
+	const char *Tail = NULL;
+
+	if (sqlite3_prepare(Handle, InstalledDBSchema, sizeof InstalledDBSchema - 1, &Statement, &Tail) != SQLITE_OK)
+	{
+		sqlite3_close(Handle);
+		return false;
+	}
+
+	if (sqlite3_step(Statement) != SQLITE_DONE)
+	{
+		sqlite3_finalize(Statement);
+		sqlite3_close(Handle);
+		return false;
+	}
+
+	sqlite3_finalize(Statement);
+	sqlite3_close(Handle);
+
+	return true;
+
+}
+
+bool DB_HasMultiArches(const char *PackageID, const PkString &Sysroot)
+{
+	sqlite3 *Handle = NULL;
+	
+	if (sqlite3_open(Sysroot + DB_DIRECTORY DB_MAIN_PATH, &Handle) != 0)
+	{
+		return false;
+	}
+	
+	sqlite3_stmt *Statement = NULL;
+	const char *Tail = NULL;
+	
+	const PkString &SQL = PkString() + "select PackageID, Arch from installed where PackageID='" + PackageID + "';";
+	if (sqlite3_prepare(Handle, SQL, SQL.size(), &Statement, &Tail) != SQLITE_OK)
+	{
+		sqlite3_close(Handle);
+		return false;
+	}
+	
+	switch (sqlite3_step(Statement))
+	{
+		case SQLITE_DONE:
+			sqlite3_finalize(Statement);
+			//Fall through
+		default:
+			sqlite3_close(Handle);
+			return false;
+			break;
+		case SQLITE_ROW:
+		{
+			const bool Result = sqlite3_step(Statement) == SQLITE_ROW;
+			sqlite3_finalize(Statement);
+			sqlite3_close(Handle);
+			return Result;
 			break;
 		}
 	}
 	
-	if (!Found) return false;
-	
-	for (Worker = Found->Next; Worker; Worker = Worker->Next)
-	{
-		if (!strcmp(PackageID, Worker->Pkg.PackageID))
-		{
-			//Something's fucky, shouldn't have two of the same arch.
-			if (!strcmp(Found->Pkg.Arch, Worker->Pkg.Arch))
-			{
-				return false;
-			}
-			
-			return true;
-		}
-	}
-	
-	return false;
 }
-
-
-//Function definitions
-struct PackageList *DB_Add(const struct Package *Pkg)
-{
-	struct PackageList **List = DB_GetListByAlpha(*Pkg->PackageID);
-	struct PackageList *Worker = NULL;
-	
-	if (!*List)
-	{
-		*List = Worker = (PackageList*)calloc(sizeof(struct PackageList), 1);
-	}
-	else
-	{
-		Worker = *List;
-		
-		while (Worker->Next) Worker = Worker->Next;
-		
-		Worker->Next = (PackageList*)calloc(sizeof(struct PackageList), 1);
-		Worker->Next->Prev = Worker;
-		Worker = Worker->Next;
-	}
-	
-	Worker->Pkg = *Pkg;
-	
-	return Worker;
-}
-
-void DB_Shutdown(void)
-{	
-	int Inc = 0;
-	for (; Inc < DBCORE_SIZE; ++Inc)
-	{
-		struct PackageList *Del, *Worker = DBCore[Inc];
-			
-			
-		for (; Worker; Worker = Del)
-		{
-			Del = Worker->Next;
-			free(Worker);
-		}
-		
-		DBCore[Inc] = NULL;
-	}
-}
-
-bool DB_Delete(const char *PackageID, const char *Arch)
-{
-	struct PackageList **List = DB_GetListByAlpha(*PackageID);
-	struct PackageList *Worker = *List;
-	
-	for (; Worker; Worker = Worker->Next)
-	{
-		if (!strcmp(PackageID, Worker->Pkg.PackageID) && Arch ? !strcmp(Arch, Worker->Pkg.Arch) : true)
-		{
-			if (Worker == *List)
-			{
-				if (Worker->Next)
-				{
-					*List = Worker->Next;
-					(*List)->Prev = NULL;
-					free(Worker);
-				}
-				else
-				{
-					free(*List);
-					*List = NULL;
-				}
-			}
-			else
-			{
-				if (Worker->Next) Worker->Next->Prev = Worker->Prev;
-				Worker->Prev->Next = Worker->Next;
-				free(Worker);
-			}
-			
-			return true;
-		}
-	}
-		
-	return false;
-}
-
-const char *DB_Disk_GetChecksums(const char *PackageID, const char *Sysroot)
-{ //Returns an allocated string that contains the checksum list.
-	char Path[4096];
-	
-	snprintf(Path, sizeof Path, "%s/%s%s/checksums.txt", Sysroot, DB_PATH, PackageID);
-	
-	struct stat FileStat;
-	
-	if (stat(Path, &FileStat) != 0)
-	{
-		return NULL;
-	}
-	
-	FILE *Desc = fopen(Path, "rb");
-	
-	if (!Desc) return NULL;
-	
-	char *Buffer = (char*)malloc(FileStat.st_size + 1);
-	fread(Buffer, 1, FileStat.st_size, Desc);
-	fclose(Desc);
-	Buffer[FileStat.st_size] = '\0';
-	
-	return Buffer;
-}
-
-const char *DB_Disk_GetFileList(const char *PackageID, const char *Arch, const char *Sysroot)
-{ //Returns an allocated string that contains the file list.
-	char Path[4096];
-	
-	snprintf(Path, sizeof Path, "%s/%s/%s.%s/filelist.txt", Sysroot, DB_PATH, PackageID, Arch);
-	
-	struct stat FileStat;
-	
-	if (stat(Path, &FileStat) != 0)
-	{
-		return NULL;
-	}
-	
-	FILE *Desc = fopen(Path, "rb");
-	
-	if (!Desc) return NULL;
-	
-	char *Buffer = (char*)malloc(FileStat.st_size + 1);
-	fread(Buffer, 1, FileStat.st_size, Desc);
-	fclose(Desc);
-	Buffer[FileStat.st_size] = '\0';
-	
-	return Buffer;
-}
-
-const char *DB_Disk_GetFileListDyn(const char *InfoDir)
-{ //Returns an allocated string that contains the file list.
-	char Path[4096];
-	
-	snprintf(Path, sizeof Path, "%s/filelist.txt", InfoDir);
-	
-	struct stat FileStat;
-	
-	if (stat(Path, &FileStat) != 0)
-	{
-		return NULL;
-	}
-	
-	FILE *Desc = fopen(Path, "rb");
-	
-	if (!Desc) return NULL;
-	
-	char *Buffer = (char*)malloc(FileStat.st_size + 1);
-	fread(Buffer, 1, FileStat.st_size, Desc);
-	fclose(Desc);
-	Buffer[FileStat.st_size] = '\0';
-	
-	return Buffer;
-}
-
-bool DB_Disk_GetMetadata(const char *Path, struct Package *OutPkg)
-{ //Loads basic metadata info.
-	
-	if (!Path) Path = ".";
-	
-	char NewPath[4096];
-	struct stat FileStat;
-	snprintf(NewPath, sizeof NewPath, "%s/metadata.txt", Path);
-	
-	if (stat(NewPath, &FileStat) != 0) return false;
-
-	FILE *Desc = fopen(NewPath, "rb");
-	
-	if (!Desc) return false;
-	
-
-	char *Text = new char[FileStat.st_size + 1];
-	
-	fread(Text, 1, FileStat.st_size, Desc);
-	fclose(Desc);
-	
-	const char *Iter = Text;
-	
-	char Line[4096];
-	char Temp[sizeof Line];
-	
-	while (SubStrings.Line.GetLine(Line, sizeof Line, &Iter))
-	{
-		if (SubStrings.StartsWith("PackageID=", Line))
-		{
-			const char *Data = Line + (sizeof "PackageID=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			OutPkg->PackageID = Temp;
-		}
-		else if (SubStrings.StartsWith("VersionString=", Line))
-		{
-			const char *Data = Line + (sizeof "VersionString=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			OutPkg->VersionString = Temp;
-		}
-		else if (SubStrings.StartsWith("Arch=", Line))
-		{
-			const char *Data = Line + (sizeof "Arch=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			OutPkg->Arch = Temp;
-		}
-		else if (SubStrings.StartsWith("Description=", Line))
-		{
-			const char *Data = Line + (sizeof "Description=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			OutPkg->Description = Temp;
-		}
-		else if (SubStrings.StartsWith("PackageGeneration=", Line))
-		{
-			const char *Data = Line + (sizeof "Arch=" - 1);
-			OutPkg->PackageGeneration = atoi(Data);
-		}
-		else if (SubStrings.StartsWith("PreInstall=", Line))
-		{
-			const char *Data = Line + (sizeof "PreInstall=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			OutPkg->Cmds.PreInstall = Temp;
-		}
-		else if (SubStrings.StartsWith("PostInstall=", Line))
-		{
-			const char *Data = Line + (sizeof "PostInstall=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			OutPkg->Cmds.PostInstall = Temp;
-		}
-		else if (SubStrings.StartsWith("PreUninstall=", Line))
-		{
-			const char *Data = Line + (sizeof "PreUninstall=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			OutPkg->Cmds.PreUninstall = Temp;
-		}
-		else if (SubStrings.StartsWith("PostUninstall=", Line))
-		{
-			const char *Data = Line + (sizeof "PostUninstall=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			OutPkg->Cmds.PostUninstall = Temp;
-		}
-		else if (SubStrings.StartsWith("PreUpdate=", Line))
-		{
-			const char *Data = Line + (sizeof "PreUpdate=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			OutPkg->Cmds.PreUpdate = Temp;
-		}
-		else if (SubStrings.StartsWith("PostUpdate=", Line))
-		{
-			const char *Data = Line + (sizeof "PostUpdate=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			OutPkg->Cmds.PostUpdate = Temp;
-		}
-		else continue; //Ignore anything that doesn't make sense.
-	}
-	
-	delete[] Text;
-	
-	return true;
-}
-
-
-static bool DB_Disk_LoadPackage(const char *Path)
-{ //Loads basic metadata info.
-	char NewPath[4096];
-	struct stat FileStat;
-	snprintf(NewPath, sizeof NewPath, "%s/metadata.txt", Path);
-	
-	if (stat(NewPath, &FileStat) != 0) return false;
-
-	FILE *Desc = fopen(NewPath, "rb");
-	
-	if (!Desc) return false;
-
-
-	char *Text = new char[FileStat.st_size + 1];
-	
-	fread(Text, 1, FileStat.st_size, Desc);
-	fclose(Desc);
-	
-	const char *Iter = Text;
-	
-	char Line[4096], Temp[sizeof Line];
-	struct Package Pkg;
-	while (SubStrings.Line.GetLine(Line, sizeof Line, &Iter))
-	{
-		if (SubStrings.StartsWith("PackageID=", Line))
-		{
-			const char *Data = Line + (sizeof "PackageID=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			Pkg.PackageID = Temp;
-		}
-		else if (SubStrings.StartsWith("VersionString=", Line))
-		{
-			const char *Data = Line + (sizeof "VersionString=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			Pkg.VersionString = Temp;
-		}
-		else if (SubStrings.StartsWith("Arch=", Line))
-		{
-			const char *Data = Line + (sizeof "Arch=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			Pkg.Arch = Temp;
-		}
-		else if (SubStrings.StartsWith("Description=", Line))
-		{
-			const char *Data = Line + (sizeof "Description=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			Pkg.Description = Temp;
-		}
-		else if (SubStrings.StartsWith("PackageGeneration=", Line))
-		{
-			const char *Data = Line + (sizeof "Arch=" - 1);
-			Pkg.PackageGeneration = atoi(Data);
-		}
-		else if (SubStrings.StartsWith("PreInstall=", Line))
-		{
-			const char *Data = Line + (sizeof "PreInstall=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			Pkg.Cmds.PreInstall = Temp;
-		}
-		else if (SubStrings.StartsWith("PostInstall=", Line))
-		{
-			const char *Data = Line + (sizeof "PostInstall=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			Pkg.Cmds.PostInstall = Temp;
-		}
-		else if (SubStrings.StartsWith("PreUninstall=", Line))
-		{
-			const char *Data = Line + (sizeof "PreUninstall=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			Pkg.Cmds.PreUninstall = Temp;
-		}
-		else if (SubStrings.StartsWith("PostUninstall=", Line))
-		{
-			const char *Data = Line + (sizeof "PostUninstall=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			Pkg.Cmds.PostUninstall = Temp;
-		}
-		else if (SubStrings.StartsWith("PreUpdate=", Line))
-		{
-			const char *Data = Line + (sizeof "PreUpdate=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			Pkg.Cmds.PreUpdate = Temp;
-		}
-		else if (SubStrings.StartsWith("PostUpdate=", Line))
-		{
-			const char *Data = Line + (sizeof "PostUpdate=" - 1);
-			SubStrings.Copy(Temp, Data, sizeof Temp);
-			Pkg.Cmds.PostUpdate = Temp;
-		}
-		else continue; //Ignore anything that doesn't make sense.
-	}
-	
-	delete[] Text;
-	//Add the package to the linked list.
-	DB_Add(&Pkg);
-	
-	return true;
-}
-
-bool DB_Disk_LoadDB(const char *Sysroot)
-{
-	struct dirent *File = NULL;
-	DIR *CurDir = NULL;
-	struct stat FileStat;
-	
-	char Path[4096];
-	snprintf(Path, sizeof Path, "%s/%s", Sysroot, DB_PATH);
-	
-	const unsigned PathLen = strlen(Path);
-	
-	if (!(CurDir = opendir(Path)))
-	{
-		return false;
-	}
-	
-	while ((File = readdir(CurDir)))
-	{
-		//Ignore . and ..
-		if (SubStrings.Compare(".", File->d_name) || SubStrings.Compare("..", File->d_name)) continue;
-		
-		Path[PathLen] = '\0';
-		SubStrings.Cat(Path, File->d_name, sizeof Path);
-		
-		if (stat(Path, &FileStat) != 0) return false;
-		
-		//Check if it's a directory like it should be.
-		if (!S_ISDIR(FileStat.st_mode)) continue;
-		
-		//Load the package data.
-		DB_Disk_LoadPackage(Path);
-	}
-	
-	closedir(CurDir);
-	
-	return true;
-}
-
-bool DB_Disk_DeletePackage(const char *PackageID, const char *Arch, const char *Sysroot)
-{
-	struct stat FileStat;
-	char Path[4096];
-	
-	snprintf(Path, sizeof Path, "%s/%s%s.%s", Sysroot, DB_PATH, PackageID, Arch);
-	
-	if (stat(Path, &FileStat) != 0 || !S_ISDIR(FileStat.st_mode))
-	{
-		return false;
-	}
-	
-	char CWD[4096];
-	getcwd(CWD, sizeof CWD);
-	
-	if (chdir(Path) != 0) return false;
-	
-	
-	//Delete db files
-	if (unlink("filelist.txt") != 0) return false;
-	if (unlink("checksums.txt") != 0) return false;
-	if (unlink("metadata.txt") != 0) return false;
-	
-	if (chdir(CWD) != 0) return false;
-	
-	//Remove the now empty directory.
-	if (rmdir(Path) != 0) return false;
-	
-	return true;
-}
-
-bool DB_Disk_SavePackage(const char *InInfoDir, const char *Sysroot)
-{	
-	
-	//Get metadata.
-	struct Package Pkg;
-	
-	if (!DB_Disk_GetMetadata(InInfoDir, &Pkg)) return false;
-	
-	//Build path for the package.
-	PkString Path = PkString(Sysroot) + '/' + DB_PATH + '/' + Pkg.PackageID + '.' + Pkg.Arch;
-	
-	struct stat DirStat;
-	
-	//Create directory if it doesn't already exist.
-	if (stat(Path, &DirStat) != 0 && mkdir(Path, 0755) != 0)
-	{
-		return false;
-	}
-	
-	bool RetVal = false;
-	//Change directory.
-	if (chdir(Path) != 0) goto Return;
-
-	///File list
-	//Build path for incoming file.
-
-	//We overwrite an earlier version.
-	if (!Files_FileCopy(PkString(InInfoDir) + "/filelist.txt", "filelist.txt", true, NULL, getuid(), getgid(), 0644)) goto Return;
-	
-	///Metadata
-	
-	if (!Files_FileCopy(PkString(InInfoDir) + "/metadata.txt", "metadata.txt", true, NULL, getuid(), getgid(), 0644)) goto Return;
-	
-	///Checksums
-	if (!Files_FileCopy(PkString(InInfoDir) + "/checksums.txt", "checksums.txt", true, NULL, getuid(), getgid(), 0644)) goto Return;
-	
-	RetVal = true;
-Return:
-	return RetVal;
-}
-

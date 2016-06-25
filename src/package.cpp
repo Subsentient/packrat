@@ -389,7 +389,7 @@ bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, c
 		{
 			case Utils::FileListLine::FLLTYPE_DIRECTORY:
 			{
-				Files_Mkdir(Path1, Path2, NULL, User, Group, LineStruct.Mode); //We don't care much if this fails, it updates the mode if the directory exists.
+				Files_Mkdir(Path1, Path2, "", User, Group, LineStruct.Mode); //We don't care much if this fails, it updates the mode if the directory exists.
 				break;
 			}
 			case Utils::FileListLine::FLLTYPE_FILE:
@@ -401,11 +401,11 @@ bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, c
 				
 				if (S_ISLNK(FileStat.st_mode))
 				{
-					if (!Files_SymlinkCopy(Path1, Path2, true, NULL, User, Group)) return false;
+					if (!Files_SymlinkCopy(Path1, Path2, true, "", User, Group)) return false;
 				}
 				else
 				{
-					if (!Files_FileCopy(Path1, Path2, true, NULL, User, Group, LineStruct.Mode)) return false;
+					if (!Files_FileCopy(Path1, Path2, true, "", User, Group, LineStruct.Mode)) return false;
 				}
 	
 			}
@@ -549,7 +549,7 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 		{
 			case Utils::FileListLine::FLLTYPE_DIRECTORY:
 			{
-				Files_Mkdir(Path1, Path2, NULL, User.UserID, GroupID, LineStruct.Mode);
+				Files_Mkdir(Path1, Path2, "", User.UserID, GroupID, LineStruct.Mode);
 				break;
 			}
 			case Utils::FileListLine::FLLTYPE_FILE:
@@ -562,11 +562,11 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 				
 				if (S_ISLNK(FileStat.st_mode))
 				{
-					Files_SymlinkCopy(Path1, Path2, false, NULL, User.UserID, GroupID);
+					Files_SymlinkCopy(Path1, Path2, false, "", User.UserID, GroupID);
 				}
 				else
 				{
-					Files_FileCopy(Path1, Path2, false, NULL, User.UserID, GroupID, LineStruct.Mode);
+					Files_FileCopy(Path1, Path2, false, "", User.UserID, GroupID, LineStruct.Mode);
 				}
 				break;
 			}
@@ -674,71 +674,31 @@ PkString Package_MakeFileChecksum(const char *FilePath)
 	return Buf;
 }
 
-bool Package_VerifyChecksums(const char *PackageDir)
+bool Package_VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDir)
 {
-	char StartingCWD[2048];
-	
-	if (getcwd(StartingCWD, sizeof StartingCWD) == NULL) return false;
-	
-	if (chdir(PackageDir) != 0) return false;
-	
-	struct stat FileStat;
-	if (stat("info/checksums.txt", &FileStat) != 0)
-	{
-		chdir(StartingCWD);
-		return false;
-	}
-	
-	FILE *Desc = fopen("info/checksums.txt", "rb");
-	
-	if (!Desc)
-	{
-		chdir(StartingCWD);
-		return false;
-	}
-	
-	char *Buf = (char*)calloc(FileStat.st_size + 1, 1);
-	
-	fread(Buf, 1, FileStat.st_size, Desc);
-	Buf[FileStat.st_size] = '\0';
-	
-	fclose(Desc);
-	
 	char Line[4096];
-	const char *Iter = Buf;
+	const char *Iter = ChecksumBuf;
 	
 	//Needs to be this size for Split()
 	char Checksum[4096], Path[4096];
 	
 	//Change to files directory.
-	if (chdir("files") != 0)
-	{
-		chdir(StartingCWD);
-		free(Buf);
-		return false;
-	}
-	
+
 	while (SubStrings.Line.GetLine(Line, sizeof Line, &Iter))
 	{
 		if (!SubStrings.Split(Checksum, Path, " ", Line, SPLIT_NOKEEP))
 		{
-			chdir(StartingCWD);
-			free(Buf);
 			return false;
 		}
 		
-		PkString NewChecksum = Package_MakeFileChecksum(Path);
+		PkString NewChecksum = Package_MakeFileChecksum(FilesDir + '/' + Path);
 		
 		if (!SubStrings.Compare(NewChecksum, Checksum))
 		{
-			chdir(StartingCWD);
-			free(Buf);
 			return false;
 		}
 	}
 	
-	chdir(StartingCWD);
-	free(Buf);
 	return true;
 }
 		
@@ -831,4 +791,130 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 	closedir(CurDir);
 	
 	return true;
+}
+
+bool Package_GetMetadata(const char *Path, struct Package *OutPkg)
+{ //Loads basic metadata info.
+	
+	if (!Path) Path = ".";
+	
+	char NewPath[4096];
+	struct stat FileStat;
+	snprintf(NewPath, sizeof NewPath, "%s/metadata.txt", Path);
+	
+	if (stat(NewPath, &FileStat) != 0) return false;
+
+	FILE *Desc = fopen(NewPath, "rb");
+	
+	if (!Desc) return false;
+	
+
+	char *Text = new char[FileStat.st_size + 1];
+	
+	fread(Text, 1, FileStat.st_size, Desc);
+	fclose(Desc);
+	
+	const char *Iter = Text;
+	
+	char Line[4096];
+	char Temp[sizeof Line];
+	
+	while (SubStrings.Line.GetLine(Line, sizeof Line, &Iter))
+	{
+		if (SubStrings.StartsWith("PackageID=", Line))
+		{
+			const char *Data = Line + (sizeof "PackageID=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->PackageID = Temp;
+		}
+		else if (SubStrings.StartsWith("VersionString=", Line))
+		{
+			const char *Data = Line + (sizeof "VersionString=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->VersionString = Temp;
+		}
+		else if (SubStrings.StartsWith("Arch=", Line))
+		{
+			const char *Data = Line + (sizeof "Arch=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Arch = Temp;
+		}
+		else if (SubStrings.StartsWith("Description=", Line))
+		{
+			const char *Data = Line + (sizeof "Description=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Description = Temp;
+		}
+		else if (SubStrings.StartsWith("PackageGeneration=", Line))
+		{
+			const char *Data = Line + (sizeof "Arch=" - 1);
+			OutPkg->PackageGeneration = atoi(Data);
+		}
+		else if (SubStrings.StartsWith("PreInstall=", Line))
+		{
+			const char *Data = Line + (sizeof "PreInstall=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Cmds.PreInstall = Temp;
+		}
+		else if (SubStrings.StartsWith("PostInstall=", Line))
+		{
+			const char *Data = Line + (sizeof "PostInstall=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Cmds.PostInstall = Temp;
+		}
+		else if (SubStrings.StartsWith("PreUninstall=", Line))
+		{
+			const char *Data = Line + (sizeof "PreUninstall=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Cmds.PreUninstall = Temp;
+		}
+		else if (SubStrings.StartsWith("PostUninstall=", Line))
+		{
+			const char *Data = Line + (sizeof "PostUninstall=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Cmds.PostUninstall = Temp;
+		}
+		else if (SubStrings.StartsWith("PreUpdate=", Line))
+		{
+			const char *Data = Line + (sizeof "PreUpdate=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Cmds.PreUpdate = Temp;
+		}
+		else if (SubStrings.StartsWith("PostUpdate=", Line))
+		{
+			const char *Data = Line + (sizeof "PostUpdate=" - 1);
+			SubStrings.Copy(Temp, Data, sizeof Temp);
+			OutPkg->Cmds.PostUpdate = Temp;
+		}
+		else continue; //Ignore anything that doesn't make sense.
+	}
+	
+	delete[] Text;
+	
+	return true;
+}
+
+const char *Package_GetFileList(const char *InfoDir)
+{ //Returns an allocated string that contains the file list.
+	char Path[4096];
+	
+	snprintf(Path, sizeof Path, "%s/filelist.txt", InfoDir);
+	
+	struct stat FileStat;
+	
+	if (stat(Path, &FileStat) != 0)
+	{
+		return NULL;
+	}
+	
+	FILE *Desc = fopen(Path, "rb");
+	
+	if (!Desc) return NULL;
+	
+	char *Buffer = (char*)malloc(FileStat.st_size + 1);
+	fread(Buffer, 1, FileStat.st_size, Desc);
+	fclose(Desc);
+	Buffer[FileStat.st_size] = '\0';
+	
+	return Buffer;
 }
