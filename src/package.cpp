@@ -556,7 +556,6 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 			{
 				if (lstat(Path1, &FileStat) != 0)
 				{
-					puts("File stat failure");
 					return false;
 				}
 				
@@ -715,8 +714,7 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 	
 	if (!(CurDir = opendir(Directory)))
 	{
-		puts(Directory);
-		fputs("Failed to opendir()\n", stderr);
+		fprintf(stderr, "Failed to opendir() path \"%s\".\n", Directory);
 		return false;
 	}
 	

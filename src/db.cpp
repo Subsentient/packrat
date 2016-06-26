@@ -170,7 +170,6 @@ bool DB_SavePackage(const Package &Pkg, const char *FileListPath, const char *Ch
 	
 	if (Code == SQLITE_ERROR || Code == SQLITE_MISUSE)
 	{
-		puts("Step failure");
 		sqlite3_close(Handle);
 		return false;
 	}
@@ -223,7 +222,6 @@ bool DB_GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *
 	
 	if (sqlite3_open(Sysroot + DB_MAIN_PATH, &Handle) != SQLITE_OK)
 	{
-		puts("Open failed");
 		return false;
 	}
 	
@@ -233,7 +231,6 @@ bool DB_GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *
 	
 	if (sqlite3_prepare(Handle, SQL, SQL.size(), &Statement, &Tail) != SQLITE_OK)
 	{
-		puts("Prepare failed");
 		sqlite3_close(Handle);
 		return false;
 	}
@@ -244,14 +241,12 @@ bool DB_GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *
 	{ //Not found.
 		sqlite3_finalize(Statement);
 		sqlite3_close(Handle);
-		puts("Not found");
 		return false;
 	}
 	
 	if (Code != SQLITE_ROW)
 	{ //Possible other error.
 		sqlite3_close(Handle);
-		puts("Weird error");
 		return false;
 	}
 	
