@@ -34,15 +34,15 @@ static const char InstalledDBSchema[] = "create table installed (\n"
 										"Arch text not null,\n"
 										"VersionString text not null,\n"
 										"PackageGeneration int default 0,\n"
-										"Description text default \"No description provided\",\n"
+										"Description text\n"
 										"PreInstall text,\n"
 										"PostInstall text,\n"
 										"PreUninstall text,\n"
 										"PostUninstall text,\n"
 										"PreUpdate text,\n"
 										"PostUpdate text,\n"
-										"FileList text,"
-										"Checksums text);";
+										"FileList text not null,\n"
+										"Checksums text not null);";
 
 //Prototypes
 static bool ProcessColumn(sqlite3_stmt *Statement, Package *Pkg, const int Index);
@@ -100,34 +100,34 @@ static bool ProcessColumn(sqlite3_stmt *Statement, Package *Pkg, const int Index
 	return true;
 }
 
-bool DB_SavePackage(const Package &Pkg, const PkString &FileListPath, const PkString &ChecksumsPath, const PkString &Sysroot)
+bool DB_SavePackage(const Package &Pkg, const char *FileListPath, const char *ChecksumsPath, const PkString &Sysroot)
 {
 	sqlite3 *Handle = NULL;
-
+	
 	PkString FileListBuf, ChecksumsBuf;
 	try
 	{
 		FileListBuf = Utils::Slurp(FileListPath);
-		ChecksumsBuf = Utils::Slurp(ChecksumsBuf);
+		ChecksumsBuf = Utils::Slurp(ChecksumsPath);
 	}
-	catch (...)
+	catch (Utils::SlurpFailure &S)
 	{
+		fprintf(stderr, "DB_SavePackage(): Failed to slurp file \"%s\": %s\n", +(S.Sysroot + S.Path), +S.Reason);
 		return false;
 	}
 	
-	if (sqlite3_open(Sysroot + DB_DIRECTORY DB_MAIN_PATH, &Handle) != SQLITE_OK)
+	if (sqlite3_open(Sysroot + DB_MAIN_PATH, &Handle) != SQLITE_OK)
 	{
 		return false;
 	}
 
-	const PkString &SQL = PkString() + "delete from installed where PackageID='" + Pkg.PackageID + "' and Arch='" + Pkg.Arch + "'; "
-					"insert into installed (PackageID, Arch, VersionString, PackageGeneration, Description, PreInstall, PostInstall,"
-					"PreUninstall, PostUninstall, PreUpdate, PostUpdate) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+	const char SQL[] = "insert into installed (PackageID, Arch, VersionString, PackageGeneration, Description, PreInstall, PostInstall, "
+					"PreUninstall, PostUninstall, PreUpdate, PostUpdate, FileList, Checksums) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
 
 	sqlite3_stmt *Statement = NULL;
 	const char *Tail = NULL;
 
-	if (sqlite3_prepare(Handle, SQL, SQL.size(), &Statement, &Tail) != SQLITE_OK)
+	if (sqlite3_prepare(Handle, SQL, sizeof SQL - 1, &Statement, &Tail) != SQLITE_OK)
 	{
 		sqlite3_close(Handle);
 		return false;
@@ -135,13 +135,15 @@ bool DB_SavePackage(const Package &Pkg, const PkString &FileListPath, const PkSt
 
 	int Indice = 1;
 	
+	const PkString NoDescription = "No description provided for this package.";
+	
 	sqlite3_bind_text(Statement, Indice++, Pkg.PackageID, Pkg.PackageID.size(), SQLITE_STATIC);
 	sqlite3_bind_text(Statement, Indice++, Pkg.Arch, Pkg.Arch.size(), SQLITE_STATIC);
 	sqlite3_bind_text(Statement, Indice++, Pkg.VersionString, Pkg.VersionString.size(), SQLITE_STATIC);
 	sqlite3_bind_int(Statement, Indice++, Pkg.PackageGeneration);
 
 	Pkg.Description ? sqlite3_bind_text(Statement, Indice++, Pkg.Description, Pkg.Description.size(), SQLITE_STATIC)
-					: sqlite3_bind_null(Statement, Indice++);
+					: sqlite3_bind_text(Statement, Indice++, NoDescription, NoDescription.size(), SQLITE_STATIC);
 
 	Pkg.Cmds.PreInstall ? sqlite3_bind_text(Statement, Indice++, Pkg.Cmds.PreInstall, Pkg.Cmds.PreInstall.size(), SQLITE_STATIC)
 						: sqlite3_bind_null(Statement, Indice++);
@@ -161,11 +163,14 @@ bool DB_SavePackage(const Package &Pkg, const PkString &FileListPath, const PkSt
 	Pkg.Cmds.PostUpdate ? sqlite3_bind_text(Statement, Indice++, Pkg.Cmds.PostUpdate, Pkg.Cmds.PostUpdate.size(), SQLITE_STATIC)
 						: sqlite3_bind_null(Statement, Indice++);
 	
-	sqlite3_bind_text(Statement, Indice++, FileListBuf, FileListBuf.size(), SQLITE_STATIC);
-	sqlite3_bind_text(Statement, Indice++, ChecksumsBuf, ChecksumsBuf.size(), SQLITE_STATIC);
+	sqlite3_bind_text(Statement, Indice++, FileListBuf, strlen(FileListBuf), SQLITE_STATIC);
+	sqlite3_bind_text(Statement, Indice++, ChecksumsBuf, strlen(ChecksumsBuf), SQLITE_STATIC);
 	
-	if (sqlite3_step(Statement) != SQLITE_DONE)
+	int Code = sqlite3_step(Statement);
+	
+	if (Code == SQLITE_ERROR || Code == SQLITE_MISUSE)
 	{
+		puts("Step failure");
 		sqlite3_close(Handle);
 		return false;
 	}
@@ -179,7 +184,7 @@ bool DB_DeletePackage(const PkString &PackageID, const PkString &Arch, const PkS
 {
 	sqlite3 *Handle = NULL;
 
-	if (sqlite3_open(Sysroot + DB_DIRECTORY DB_MAIN_PATH, &Handle) != 0)
+	if (sqlite3_open(Sysroot + DB_MAIN_PATH, &Handle) != SQLITE_OK)
 	{
 		return false;
 	}
@@ -216,8 +221,9 @@ bool DB_GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *
 	
 	sqlite3 *Handle = NULL;
 	
-	if (sqlite3_open(Sysroot + DB_DIRECTORY DB_MAIN_PATH, &Handle) != SQLITE_OK)
+	if (sqlite3_open(Sysroot + DB_MAIN_PATH, &Handle) != SQLITE_OK)
 	{
+		puts("Open failed");
 		return false;
 	}
 	
@@ -227,7 +233,9 @@ bool DB_GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *
 	
 	if (sqlite3_prepare(Handle, SQL, SQL.size(), &Statement, &Tail) != SQLITE_OK)
 	{
+		puts("Prepare failed");
 		sqlite3_close(Handle);
+		return false;
 	}
 	
 	int Code = sqlite3_step(Statement);
@@ -236,12 +244,14 @@ bool DB_GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *
 	{ //Not found.
 		sqlite3_finalize(Statement);
 		sqlite3_close(Handle);
+		puts("Not found");
 		return false;
 	}
 	
 	if (Code != SQLITE_ROW)
 	{ //Possible other error.
 		sqlite3_close(Handle);
+		puts("Weird error");
 		return false;
 	}
 	
@@ -280,7 +290,7 @@ bool DB_LoadPackage(const PkString &PackageID, const PkString &Arch, Package *Ou
 	
 	sqlite3 *Handle = NULL;
 	
-	if (sqlite3_open(Sysroot + DB_DIRECTORY DB_MAIN_PATH, &Handle) != SQLITE_OK)
+	if (sqlite3_open(Sysroot + DB_MAIN_PATH, &Handle) != SQLITE_OK)
 	{
 		return false;
 	}
@@ -330,11 +340,11 @@ bool DB_InitializeEmptyDB(const PkString &Sysroot)
 { //Wipe database and recreate as empty.
 	
 	//Wipe it and set permissions.
-	Utils::WriteFile(Sysroot + DB_DIRECTORY DB_MAIN_PATH, NULL, 0, false, 0664);
+	Utils::WriteFile(Sysroot + DB_MAIN_PATH, NULL, 0, false, 0664);
 	
 	sqlite3 *Handle = NULL;
 
-	if (sqlite3_open(Sysroot + DB_DIRECTORY DB_MAIN_PATH, &Handle) != 0)
+	if (sqlite3_open(Sysroot + DB_MAIN_PATH, &Handle) != 0)
 	{
 		return false;
 	}
@@ -366,7 +376,7 @@ bool DB_HasMultiArches(const char *PackageID, const PkString &Sysroot)
 {
 	sqlite3 *Handle = NULL;
 	
-	if (sqlite3_open(Sysroot + DB_DIRECTORY DB_MAIN_PATH, &Handle) != 0)
+	if (sqlite3_open(Sysroot + DB_MAIN_PATH, &Handle) != 0)
 	{
 		return false;
 	}

@@ -31,7 +31,9 @@ namespace Utils
 	struct SlurpFailure
 	{ //Exception class for Slurp below.
 		PkString Reason;
-		SlurpFailure(const char *InReason = "Unspecified") : Reason(InReason) {}
+		PkString Path, Sysroot;
+		SlurpFailure(const char *InReason = "Unspecified", const char *InPath = "Unspecified", const char *InSysroot = "")
+					: Reason(InReason), Path(InPath), Sysroot(InSysroot) {}
 	};
 	struct FileListLine
 	{
@@ -40,7 +42,7 @@ namespace Utils
 		enum FLLType { FLLTYPE_INVALID, FLLTYPE_FILE, FLLTYPE_DIRECTORY, FLLTYPE_MAX } Type;
 	};
 	class FileSize_Error {};
-	static inline PkString Slurp(const char *Path, const char *Sysroot = NULL) throw(Utils::SlurpFailure);
+	static inline PkString Slurp(const char *Path, const PkString &Sysroot = "") throw(Utils::SlurpFailure);
 	static inline bool WriteFile(const PkString &Filename, const char *Data, const size_t DataSize, const bool Append, const signed Permissions = -1);
 	static inline size_t FileSize(const char *Path, const char *Sysroot = NULL);
 	static inline FileListLine BreakdownFileListLine(const PkString &Line);
@@ -48,13 +50,14 @@ namespace Utils
 }
 
 //Functions
-static inline PkString Utils::Slurp(const char *Path, const char *Sysroot) throw(Utils::SlurpFailure)
+static inline PkString Utils::Slurp(const char *Path, const PkString &Sysroot) throw(Utils::SlurpFailure)
 {
+	if (!Path || !*Path) throw Utils::SlurpFailure("No path specified");
 	struct stat FileStat;
 	
 	PkString FinalPath = Sysroot ? PkString(Sysroot) + '/' + Path : PkString(Path);
 	//Stat the file.
-	if (stat(FinalPath, &FileStat) != 0) throw Utils::SlurpFailure("Unable to stat target file");
+	if (stat(FinalPath, &FileStat) != 0) throw Utils::SlurpFailure("Unable to stat target file", Path, Sysroot);
 	
 	FILE *Desc;
 	
@@ -62,7 +65,7 @@ static inline PkString Utils::Slurp(const char *Path, const char *Sysroot) throw
 	Desc = fopen(FinalPath, "rb");
 	
 	//Failed.
-	if (!Desc) throw Utils::SlurpFailure("Unable to open target file for reading.");
+	if (!Desc) throw Utils::SlurpFailure("Unable to open target file for reading.", Path, Sysroot);
 	
 	//Allocate.
 	uint8_t *Buffer = new uint8_t[FileStat.st_size + 1];

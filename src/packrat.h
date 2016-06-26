@@ -128,7 +128,7 @@ bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group
 
 //db.cpp
 bool DB_LoadPackage(const PkString &PackageID, const PkString &Arch, Package *Out, const PkString &Sysroot = "/");
-bool DB_SavePackage(const Package &Pkg, const PkString &FileListPath, const PkString &ChecksumsPath, const PkString &Sysroot = "/");
+bool DB_SavePackage(const Package &Pkg, const char *FileListPath, const char *ChecksumsPath, const PkString &Sysroot = "/");
 bool DB_DeletePackage(const PkString &PackageID, const PkString &Arch, const PkString &Sysroot = "/");
 bool DB_InitializeEmptyDB(const PkString &Sysroot = "/");
 bool DB_GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *OutFileList, PkString *OutChecksums, const PkString &Sysroot = "/");

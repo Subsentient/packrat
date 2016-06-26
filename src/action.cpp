@@ -318,6 +318,7 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 	}
 	
 	const PkString InfoDirPath = PkString(Path) + "/info";
+	const PkString FilesDirPath = PkString(Path) + "/files";
 	
 	struct Package Pkg = { 0 }; //Zero initialize the entire blob.
 	
@@ -357,8 +358,9 @@ bool Action_InstallPackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
+	//puts(ChecksumsBuf); fflush(NULL);
 	//Verify checksums to ensure file integrity.
-	if (!Package_VerifyChecksums(ChecksumsBuf, Path))
+	if (!Package_VerifyChecksums(ChecksumsBuf, FilesDirPath))
 	{
 		fprintf(stderr, "%s_%s-%u.%s: Package file checksum failure; package may be damaged.\n",
 				+Pkg.PackageID, +Pkg.VersionString, Pkg.PackageGeneration, +Pkg.Arch);

@@ -1,7 +1,7 @@
 CC = gcc
 AR = ar
 RANLIB = ranlib
-CFLAGS = -std=gnu89 -pedantic -Wall -O3
+CFLAGS = -std=gnu89 -pedantic -Wall -O3 -fstack-protector
 PREFIX = /usr
 all: shared static
 

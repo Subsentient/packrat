@@ -30,7 +30,8 @@ enum OperationMode
 	OP_INSTALL,
 	OP_REMOVE,
 	OP_UPDATE,
-	OP_DISPLAY
+	OP_DISPLAY,
+	OP_MKDB
 };
 
 int main(int argc, char **argv)
@@ -69,6 +70,10 @@ int main(int argc, char **argv)
 	else if (!strcmp(argv[1], "display"))
 	{
 		Mode = OP_DISPLAY;
+	}
+	else if (!strcmp(argv[1], "mkdb"))
+	{
+		Mode = OP_MKDB;
 	}
 	else
 	{
@@ -182,6 +187,10 @@ int main(int argc, char **argv)
 		
 	switch (Mode)
 	{
+		case OP_MKDB:
+		{
+			return !DB_InitializeEmptyDB(Sysroot);
+		}
 		case OP_CREATE:
 		{
 			if (Pkg.PackageID.empty() || Pkg.Arch.empty() || Pkg.VersionString.empty() || !*CreationDirectory)
