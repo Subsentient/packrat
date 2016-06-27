@@ -25,7 +25,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "substrings/substrings.h"
 #include "packrat.h"
 	
-bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut)
+bool Files::TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut)
 {
 	struct passwd *UserVal = getpwnam(User);
 	struct group *GroupVal = getgrnam(Group);
@@ -37,7 +37,7 @@ bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group
 	return true;
 }
 
-bool Files_Mkdir(const char *Source, const char *Destination_, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode)
+bool Files::Mkdir(const char *Source, const char *Destination_, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode)
 { //There will be no overwrite option for this one. The directory is probably not empty.
 	struct stat DirStat;
 	
@@ -65,7 +65,7 @@ bool Files_Mkdir(const char *Source, const char *Destination_, const PkString &S
 	return true;
 }
 
-bool Files_SymlinkCopy(const char *Source, const char *Destination_, bool Overwrite, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID)
+bool Files::SymlinkCopy(const char *Source, const char *Destination_, bool Overwrite, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID)
 {
 	struct stat LinkStat;
 	
@@ -113,7 +113,7 @@ bool Files_SymlinkCopy(const char *Source, const char *Destination_, bool Overwr
 	return true;
 }
 
-bool Files_FileCopy(const char *Source, const char *Destination_, const bool Overwrite, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode)
+bool Files::FileCopy(const char *Source, const char *Destination_, const bool Overwrite, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode)
 { //Copies a file preserving its permissions.
 	FILE *In = fopen(Source, "rb");
 

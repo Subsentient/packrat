@@ -34,7 +34,7 @@ static const char InstalledDBSchema[] = "create table installed (\n"
 										"Arch text not null,\n"
 										"VersionString text not null,\n"
 										"PackageGeneration int default 0,\n"
-										"Description text\n"
+										"Description text,\n"
 										"PreInstall text,\n"
 										"PostInstall text,\n"
 										"PreUninstall text,\n"
@@ -100,7 +100,7 @@ static bool ProcessColumn(sqlite3_stmt *Statement, Package *Pkg, const int Index
 	return true;
 }
 
-bool DB_SavePackage(const Package &Pkg, const char *FileListPath, const char *ChecksumsPath, const PkString &Sysroot)
+bool DB::SavePackage(const Package &Pkg, const char *FileListPath, const char *ChecksumsPath, const PkString &Sysroot)
 {
 	sqlite3 *Handle = NULL;
 	
@@ -112,12 +112,13 @@ bool DB_SavePackage(const Package &Pkg, const char *FileListPath, const char *Ch
 	}
 	catch (Utils::SlurpFailure &S)
 	{
-		fprintf(stderr, "DB_SavePackage(): Failed to slurp file \"%s\": %s\n", +(S.Sysroot + S.Path), +S.Reason);
+		fprintf(stderr, "DB::SavePackage(): Failed to slurp file \"%s\": %s\n", +(S.Sysroot + S.Path), +S.Reason);
 		return false;
 	}
 	
 	if (sqlite3_open(Sysroot + DB_MAIN_PATH, &Handle) != SQLITE_OK)
 	{
+		puts("Failed to open");
 		return false;
 	}
 
@@ -129,6 +130,7 @@ bool DB_SavePackage(const Package &Pkg, const char *FileListPath, const char *Ch
 
 	if (sqlite3_prepare(Handle, SQL, sizeof SQL - 1, &Statement, &Tail) != SQLITE_OK)
 	{
+		puts("Failed to prepare");
 		sqlite3_close(Handle);
 		return false;
 	}
@@ -179,7 +181,7 @@ bool DB_SavePackage(const Package &Pkg, const char *FileListPath, const char *Ch
 	return true;
 }
 
-bool DB_DeletePackage(const PkString &PackageID, const PkString &Arch, const PkString &Sysroot)
+bool DB::DeletePackage(const PkString &PackageID, const PkString &Arch, const PkString &Sysroot)
 {
 	sqlite3 *Handle = NULL;
 
@@ -213,7 +215,7 @@ bool DB_DeletePackage(const PkString &PackageID, const PkString &Arch, const PkS
 }
 
 
-bool DB_GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *OutFileList, PkString *OutChecksums, const PkString &Sysroot)
+bool DB::GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *OutFileList, PkString *OutChecksums, const PkString &Sysroot)
 { //Does NOT get the file list or checksums, but everything else.
 	if (!PackageID || !Arch || (!OutFileList && !OutChecksums)) return false; //Gotta be pretty fucktarded to deliberately do this.
 	
@@ -278,7 +280,7 @@ bool DB_GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *
 }
 
 
-bool DB_LoadPackage(const PkString &PackageID, const PkString &Arch, Package *Out, const PkString &Sysroot)
+bool DB::LoadPackage(const PkString &PackageID, const PkString &Arch, Package *Out, const PkString &Sysroot)
 { //Does NOT get the file list or checksums, but everything else.
 	if (!PackageID || !Arch || !Out) return false; //Gotta be pretty fucktarded to deliberately do this.
 	
@@ -331,7 +333,7 @@ bool DB_LoadPackage(const PkString &PackageID, const PkString &Arch, Package *Ou
 	return true;
 }
 
-bool DB_InitializeEmptyDB(const PkString &Sysroot)
+bool DB::InitializeEmptyDB(const PkString &Sysroot)
 { //Wipe database and recreate as empty.
 	
 	//Wipe it and set permissions.
@@ -367,7 +369,7 @@ bool DB_InitializeEmptyDB(const PkString &Sysroot)
 
 }
 
-bool DB_HasMultiArches(const char *PackageID, const PkString &Sysroot)
+bool DB::HasMultiArches(const char *PackageID, const PkString &Sysroot)
 {
 	sqlite3 *Handle = NULL;
 	

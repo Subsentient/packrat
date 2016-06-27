@@ -22,7 +22,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "packrat.h"
 #include "substrings/substrings.h"
 
-struct PasswdUser PWSR_LookupUsername(const char *Sysroot, const char *Username)
+struct PasswdUser PWSR::LookupUsername(const char *Sysroot, const char *Username)
 {
 	PkString PasswdFile;
 	
@@ -117,7 +117,7 @@ struct PasswdUser PWSR_LookupUsername(const char *Sysroot, const char *Username)
 	return RetVal;
 }
 
-PkString PWSR_LookupGroupID(const char *Sysroot, const gid_t GID)
+PkString PWSR::LookupGroupID(const char *Sysroot, const gid_t GID)
 {
 	PkString GroupFile;
 	
@@ -155,7 +155,7 @@ PkString PWSR_LookupGroupID(const char *Sysroot, const gid_t GID)
 	return PkString();
 }
 
-struct PasswdUser PWSR_LookupUserID(const char *Sysroot, const uid_t UID)
+struct PasswdUser PWSR::LookupUserID(const char *Sysroot, const uid_t UID)
 {
 	PkString PasswdFile;
 	
@@ -254,7 +254,7 @@ struct PasswdUser PWSR_LookupUserID(const char *Sysroot, const uid_t UID)
 	return RetVal;
 }
 
-bool PWSR_LookupGroupname(const char *Sysroot, const char *Groupname, gid_t *OutGID)
+bool PWSR::LookupGroupname(const char *Sysroot, const char *Groupname, gid_t *OutGID)
 {
 	PkString GroupFile;
 	

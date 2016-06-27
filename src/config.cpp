@@ -28,10 +28,10 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 static std::set<PkString> SupportedArches;
 
 //Static function prototypes
-static bool Config_ProcessConfig(const char *ConfigStream);
+static bool ProcessConfig(const char *ConfigStream);
 
 //Actual functions
-bool Config_LoadConfig(const char *Sysroot)
+bool Config::LoadConfig(const char *Sysroot)
 {
 	struct stat FileStat;
 	
@@ -54,13 +54,13 @@ bool Config_LoadConfig(const char *Sysroot)
 	
 	fclose(Descriptor);
 	
-	Config_ProcessConfig(ConfigStream);
+	ProcessConfig(ConfigStream);
 	
 	delete[] ConfigStream;
 	return true;
 }
 
-static bool Config_ProcessConfig(const char *const ConfigStream)
+static bool ProcessConfig(const char *const ConfigStream)
 {
 	char CurrentLine[4096];
 	const char *Worker = ConfigStream;
@@ -88,7 +88,7 @@ static bool Config_ProcessConfig(const char *const ConfigStream)
 	return true;
 }
 
-bool Config_ArchPresent(const char *CheckArch)
+bool Config::ArchPresent(const char *CheckArch)
 {
 	return SupportedArches.count(CheckArch);
 }

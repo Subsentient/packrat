@@ -32,13 +32,13 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 #define SHA1_PER_READ_SIZE ((1024 * 1024) * 5) //5MB
 
-static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath, const char *Sysroot = "/");
-static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc);
-static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList);
+static bool BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath, const char *Sysroot = "/");
+static bool MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc);
+static bool MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList);
 	
-bool Package_MountPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize)
+bool PackageNS::MountPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize)
 {	
-	if (!Action_CreateTempCacheDir(PkgDirPath, PkgDirPathSize, Sysroot))
+	if (!Action::CreateTempCacheDir(PkgDirPath, PkgDirPathSize, Sysroot))
 	{
 		return false;
 	}
@@ -75,7 +75,7 @@ bool Package_MountPackage(const char *AbsolutePathToPkg, const char *const Sysro
 	return WEXITSTATUS(RawExitStatus) == 0;
 }
 
-bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize)
+bool PackageNS::GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize)
 { //Basically just a wrapper function to easily read in the ascii from a package config file.
 	char Path[4096];
 	
@@ -105,7 +105,7 @@ bool Package_GetPackageConfig(const char *const DirPath, const char *const File,
 	return true;
 }
 
-bool Package_CreatePackage(const struct Package *Job, const char *Directory)
+bool PackageNS::CreatePackage(const struct Package *Job, const char *Directory)
 {
 	//cd to the new directory
 	printf("---\nCreating package from directory %s\n---\nPackageID=%s\nVersionString=%s\nArch=%s\nPackageGeneration=%u\n",
@@ -158,7 +158,7 @@ bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 		return false;
 	}
 	//Do the file list creation.
-	if (!Package_BuildFileList(Directory, Desc, false))
+	if (!BuildFileList(Directory, Desc, false))
 	{
 		fprintf(stderr, "Failed to create filelist.txt; data processing error.\n");
 		return false;
@@ -173,7 +173,7 @@ bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 		return false;
 	}
 	//Do the checksum list creation.
-	if (!Package_MakeAllChecksums(Directory, FileListPath, Desc))
+	if (!MakeAllChecksums(Directory, FileListPath, Desc))
 	{
 		fprintf(stderr, "Failed to build checksums.txt; data processing error.\n");
 		return false;
@@ -182,7 +182,7 @@ bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 	
 	puts("Building info/metadata.txt...");
 	//Save package metadata.
-	if (!Package_SaveMetadata(Job, PackageInfoDir))
+	if (!PackageNS::SaveMetadata(Job, PackageInfoDir))
 	{
 		fprintf(stderr, "Failed to save metadata.txt\n");
 		return false;
@@ -190,7 +190,7 @@ bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 	
 	puts("Copying files...");
 	//Clone files into the new directory.
-	if (!Package_MkPkgCloneFiles(PackageDataPath, Directory, FileListPath))
+	if (!MkPkgCloneFiles(PackageDataPath, Directory, FileListPath))
 	{
 		fprintf(stderr, "File copy failed.\n");
 		return false;
@@ -198,7 +198,7 @@ bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 	
 	puts("Creating .pkrt file...");
 	//Compress package.
-	if (!Package_CompressPackage(PackageFullName, NULL))
+	if (!PackageNS::CompressPackage(PackageFullName, NULL))
 	{
 		fprintf(stderr, "Failed to create .pkrt package.\n");
 		return false;
@@ -217,7 +217,7 @@ bool Package_CreatePackage(const struct Package *Job, const char *Directory)
 	
 }
 
-bool Package_CompressPackage(const char *PackageTempDir, const char *OutFile)
+bool PackageNS::CompressPackage(const char *PackageTempDir, const char *OutFile)
 {
 	char PackageName[4096];
 	
@@ -253,7 +253,7 @@ bool Package_CompressPackage(const char *PackageTempDir, const char *OutFile)
 	return WEXITSTATUS(RawExitStatus) == 0;
 }
 
-bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath)
+bool PackageNS::SaveMetadata(const struct Package *Pkg, const char *InfoPath)
 {
 	char MetadataPath[4096];
 	
@@ -314,13 +314,13 @@ bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath)
 	return true;
 }
 
-bool Package_UpdateFiles(const char *PackageDir, const char *Sysroot, const char *OldFileListBuf, const char *NewFileListBuf)
+bool PackageNS::UpdateFiles(const char *PackageDir, const char *Sysroot, const char *OldFileListBuf, const char *NewFileListBuf)
 { //Deletes files that no longer exist in the newer version of the package, and then overwrites the remaining with new data.
 	if (!OldFileListBuf || !NewFileListBuf) return false;
 	
 	//First thing is write the new versions of the files.
 	
-	if (!Package_InstallFiles(PackageDir, Sysroot, NewFileListBuf))
+	if (!PackageNS::InstallFiles(PackageDir, Sysroot, NewFileListBuf))
 	{
 		return false;
 	}
@@ -365,7 +365,7 @@ bool Package_UpdateFiles(const char *PackageDir, const char *Sysroot, const char
 
 }
 
-bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, const char *FileListBuf)
+bool PackageNS::ReverseInstallFiles(const char *Destination, const char *Sysroot, const char *FileListBuf)
 {
 	char CurLine[4096];
 	const char *Iter = FileListBuf;
@@ -375,9 +375,9 @@ bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, c
 	{
 		Utils::FileListLine LineStruct = Utils::BreakdownFileListLine(CurLine);
 		
-		uid_t User = PWSR_LookupUsername(Sysroot, LineStruct.User).UserID;
+		uid_t User = PWSR::LookupUsername(Sysroot, LineStruct.User).UserID;
 		gid_t Group = 0;
-		PWSR_LookupGroupname(Sysroot, LineStruct.Group, &Group);
+		PWSR::LookupGroupname(Sysroot, LineStruct.Group, &Group);
 		
 		const char *ActualPath = LineStruct.Path; //Plus the 'd ' or 'f '
 		
@@ -389,7 +389,7 @@ bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, c
 		{
 			case Utils::FileListLine::FLLTYPE_DIRECTORY:
 			{
-				Files_Mkdir(Path1, Path2, "", User, Group, LineStruct.Mode); //We don't care much if this fails, it updates the mode if the directory exists.
+				Files::Mkdir(Path1, Path2, "", User, Group, LineStruct.Mode); //We don't care much if this fails, it updates the mode if the directory exists.
 				break;
 			}
 			case Utils::FileListLine::FLLTYPE_FILE:
@@ -401,11 +401,11 @@ bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, c
 				
 				if (S_ISLNK(FileStat.st_mode))
 				{
-					if (!Files_SymlinkCopy(Path1, Path2, true, "", User, Group)) return false;
+					if (!Files::SymlinkCopy(Path1, Path2, true, "", User, Group)) return false;
 				}
 				else
 				{
-					if (!Files_FileCopy(Path1, Path2, true, "", User, Group, LineStruct.Mode)) return false;
+					if (!Files::FileCopy(Path1, Path2, true, "", User, Group, LineStruct.Mode)) return false;
 				}
 	
 			}
@@ -416,7 +416,7 @@ bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, c
 	return true;
 }
 
-bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf)
+bool PackageNS::InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf)
 {
 	char CurLine[4096];
 	const char *Iter = FileListBuf;
@@ -426,10 +426,10 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 	{
 		Utils::FileListLine LineStruct = Utils::BreakdownFileListLine(CurLine);
 		gid_t GroupID = 0;
-		PasswdUser UserInfo = PWSR_LookupUsername(Sysroot, LineStruct.User);
+		PasswdUser UserInfo = PWSR::LookupUsername(Sysroot, LineStruct.User);
 		uid_t &UserID = UserInfo.UserID;
 		
-		PWSR_LookupGroupname(Sysroot, LineStruct.Group, &GroupID);
+		PWSR::LookupGroupname(Sysroot, LineStruct.Group, &GroupID);
 		
 		const char *ActualPath = LineStruct.Path;
 		
@@ -439,7 +439,7 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 		{
 			case Utils::FileListLine::FLLTYPE_DIRECTORY:
 			{
-				Files_Mkdir(SrcPath, ActualPath, Sysroot, UserID, GroupID, LineStruct.Mode); //We don't care much if this fails, it updates the mode if the directory exists.
+				Files::Mkdir(SrcPath, ActualPath, Sysroot, UserID, GroupID, LineStruct.Mode); //We don't care much if this fails, it updates the mode if the directory exists.
 				break;
 			}
 			case Utils::FileListLine::FLLTYPE_FILE:
@@ -451,11 +451,11 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 				
 				if (S_ISLNK(FileStat.st_mode))
 				{
-					if (!Files_SymlinkCopy(SrcPath, ActualPath, true, Sysroot, UserID, GroupID)) return false;
+					if (!Files::SymlinkCopy(SrcPath, ActualPath, true, Sysroot, UserID, GroupID)) return false;
 				}
 				else
 				{
-					if (!Files_FileCopy(SrcPath, ActualPath, true, Sysroot, UserID, GroupID, LineStruct.Mode)) return false;
+					if (!Files::FileCopy(SrcPath, ActualPath, true, Sysroot, UserID, GroupID, LineStruct.Mode)) return false;
 				}
 				break;
 			}
@@ -466,7 +466,7 @@ bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const cha
 	return true;
 }
 
-bool Package_UninstallFiles(const char *Sysroot, const char *FileListBuf)
+bool PackageNS::UninstallFiles(const char *Sysroot, const char *FileListBuf)
 {
 	char CurLine[4096];
 	struct stat FileStat;
@@ -498,7 +498,7 @@ bool Package_UninstallFiles(const char *Sysroot, const char *FileListBuf)
 	return true;
 }
 
-static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList)
+static bool MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList)
 { //Used when building a package.
 	
 	PkString Buffer;
@@ -527,12 +527,12 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 	{
 		Utils::FileListLine LineStruct = Utils::BreakdownFileListLine(Line);
 		
-		PasswdUser User = LineStruct.User == LastUser.Username ? LastUser : PWSR_LookupUsername("/", LineStruct.User);
+		PasswdUser User = LineStruct.User == LastUser.Username ? LastUser : PWSR::LookupUsername("/", LineStruct.User);
 		
 		gid_t GroupID = 0;
 		
 		if (LineStruct.Group == LastUser.Groupname) GroupID = LastGroupID;
-		else PWSR_LookupGroupname("/", LineStruct.Group, &GroupID);
+		else PWSR::LookupGroupname("/", LineStruct.Group, &GroupID);
 		
 		LastGroupID = GroupID;
 		LastGroupText = LineStruct.Group;
@@ -549,7 +549,7 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 		{
 			case Utils::FileListLine::FLLTYPE_DIRECTORY:
 			{
-				Files_Mkdir(Path1, Path2, "", User.UserID, GroupID, LineStruct.Mode);
+				Files::Mkdir(Path1, Path2, "", User.UserID, GroupID, LineStruct.Mode);
 				break;
 			}
 			case Utils::FileListLine::FLLTYPE_FILE:
@@ -561,11 +561,11 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 				
 				if (S_ISLNK(FileStat.st_mode))
 				{
-					Files_SymlinkCopy(Path1, Path2, false, "", User.UserID, GroupID);
+					Files::SymlinkCopy(Path1, Path2, false, "", User.UserID, GroupID);
 				}
 				else
 				{
-					Files_FileCopy(Path1, Path2, false, "", User.UserID, GroupID, LineStruct.Mode);
+					Files::FileCopy(Path1, Path2, false, "", User.UserID, GroupID, LineStruct.Mode);
 				}
 				break;
 			}
@@ -576,7 +576,7 @@ static bool Package_MkPkgCloneFiles(const char *PackageDir, const char *InputDir
 	return true;
 }
 
-static bool Package_MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc)
+static bool MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc)
 { //Build a checksums file list.
 	PkString FileData;
 	try
@@ -608,7 +608,7 @@ static bool Package_MakeAllChecksums(const char *Directory, const char *FileList
 		struct stat TempStat;
 		if (lstat(PathBuf, &TempStat) != 0 || S_ISLNK(TempStat.st_mode)) continue;
 		
-		PkString Checksum = Package_MakeFileChecksum(PathBuf);
+		PkString Checksum = PackageNS::MakeFileChecksum(PathBuf);
 		
 		//Build the checksum.
 		if (!Checksum)
@@ -627,7 +627,7 @@ static bool Package_MakeAllChecksums(const char *Directory, const char *FileList
 }
 	
 	
-PkString Package_MakeFileChecksum(const char *FilePath)
+PkString PackageNS::MakeFileChecksum(const char *FilePath)
 { //Fairly fast function to get a sha1 of a file.
 	unsigned char Hash[SHA_DIGEST_LENGTH];
 	
@@ -673,7 +673,7 @@ PkString Package_MakeFileChecksum(const char *FilePath)
 	return Buf;
 }
 
-bool Package_VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDir)
+bool PackageNS::VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDir)
 {
 	char Line[4096];
 	const char *Iter = ChecksumBuf;
@@ -690,7 +690,7 @@ bool Package_VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDir)
 			return false;
 		}
 		
-		PkString NewChecksum = Package_MakeFileChecksum(FilesDir + '/' + Path);
+		PkString NewChecksum = PackageNS::MakeFileChecksum(FilesDir + '/' + Path);
 		
 		if (!SubStrings.Compare(NewChecksum, Checksum))
 		{
@@ -702,7 +702,7 @@ bool Package_VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDir)
 }
 		
 	
-static bool Package_BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath, const char *Sysroot)
+static bool BuildFileList(const char *const Directory_, FILE *const OutDesc, bool FullPath, const char *Sysroot)
 {
 	struct dirent *File = NULL;
 	DIR *CurDir = NULL;
@@ -745,8 +745,8 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		if (S_ISDIR(FileStat.st_mode))
 		{ //It's a directory.
 			
-			PasswdUser User = FileStat.st_uid != LastUser.UserID ? PWSR_LookupUserID("/", FileStat.st_uid) : LastUser;
-			PkString Group = FileStat.st_gid != LastGroupID ? PWSR_LookupGroupID("/", FileStat.st_gid) : LastGroup;
+			PasswdUser User = FileStat.st_uid != LastUser.UserID ? PWSR::LookupUserID("/", FileStat.st_uid) : LastUser;
+			PkString Group = FileStat.st_gid != LastGroupID ? PWSR::LookupGroupID("/", FileStat.st_gid) : LastGroup;
 			
 			//We do this stuff for optimization. Should make a big difference.
 			LastUser = User;
@@ -762,7 +762,7 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 			
 			if (!FullPath) chdir(Directory);
 			
-			if (!Package_BuildFileList(FullPath ? AbsPath : File->d_name, OutDesc, true))
+			if (!BuildFileList(FullPath ? AbsPath : File->d_name, OutDesc, true))
 			{
 				closedir(CurDir);
 				chdir(CWD);
@@ -773,8 +773,8 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 		}
 		//It's a file.
 		
-		PasswdUser User = FileStat.st_uid != LastUser.UserID ? PWSR_LookupUserID("/", FileStat.st_uid) : LastUser;
-		PkString Group = FileStat.st_gid != LastGroupID ? PWSR_LookupGroupID("/", FileStat.st_gid) : LastGroup;
+		PasswdUser User = FileStat.st_uid != LastUser.UserID ? PWSR::LookupUserID("/", FileStat.st_uid) : LastUser;
+		PkString Group = FileStat.st_gid != LastGroupID ? PWSR::LookupGroupID("/", FileStat.st_gid) : LastGroup;
 		
 		//Optimization stuff so we don't look through /etc/passwd and /etc/group for every file.
 		LastUser = User;
@@ -791,7 +791,7 @@ static bool Package_BuildFileList(const char *const Directory_, FILE *const OutD
 	return true;
 }
 
-bool Package_GetMetadata(const char *Path, struct Package *OutPkg)
+bool PackageNS::GetMetadata(const char *Path, struct Package *OutPkg)
 { //Loads basic metadata info.
 	
 	if (!Path) Path = ".";
@@ -892,7 +892,7 @@ bool Package_GetMetadata(const char *Path, struct Package *OutPkg)
 	return true;
 }
 
-const char *Package_GetFileList(const char *InfoDir)
+const char *PackageNS::GetFileList(const char *InfoDir)
 { //Returns an allocated string that contains the file list.
 	char Path[4096];
 	

@@ -95,53 +95,74 @@ struct Package
 #include "utils.h"
 
 //action.cpp
-bool Action_InstallPackage(const char *PkgPath, const char *Sysroot);
-bool Action_UninstallPackage(const char *PackageID, const char *Arch, const char *Sysroot);
-bool Action_UpdatePackage(const char *PkgPath, const char *Sysroot);
-bool Action_CreateTempCacheDir(char *OutBuf, const unsigned OutBufSize, const char *Sysroot);
+namespace Action
+{
+	bool InstallPackage(const char *PkgPath, const char *Sysroot);
+	bool UninstallPackage(const char *PackageID, const char *Arch, const char *Sysroot);
+	bool UpdatePackage(const char *PkgPath, const char *Sysroot);
+	bool ReverseInstall(const char *PackageID, const char *Arch, const char *Sysroot);
+	bool CreateTempCacheDir(char *OutBuf, const unsigned OutBufSize, const char *Sysroot);
+}
 
 //config.cpp
-bool Config_ArchPresent(const char *CheckArch);
-bool Config_LoadConfig(const char *Sysroot);
+namespace Config
+{
+	bool ArchPresent(const char *CheckArch);
+	bool LoadConfig(const char *Sysroot);
+}
 
 //package.cpp
-bool Package_MountPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize);
-bool Package_GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
-PkString Package_MakeFileChecksum(const char *FilePath);
-bool Package_InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf);
-bool Package_UpdateFiles(const char *PackageDir, const char *Sysroot, const char *OldFileListBuf, const char *NewFileListBuf);
-bool Package_SaveMetadata(const struct Package *Pkg, const char *InfoPath);
-bool Package_UninstallFiles(const char *Sysroot, const char *FileListBuf);
-bool Package_CreatePackage(const struct Package *Job, const char *Directory);
-bool Package_VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDir);
-bool Package_ReverseInstallFiles(const char *Destination, const char *Sysroot, const char *FileListBuf);
-bool Package_CompressPackage(const char *PackageTempDir, const char *OutFile);
-bool Package_GetMetadata(const char *Path, struct Package *OutPkg);
-const char *Package_GetFileList(const char *InfoDir);
-
+namespace PackageNS
+{
+	bool MountPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize);
+	bool GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
+	PkString MakeFileChecksum(const char *FilePath);
+	bool InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf);
+	bool UpdateFiles(const char *PackageDir, const char *Sysroot, const char *OldFileListBuf, const char *NewFileListBuf);
+	bool SaveMetadata(const struct Package *Pkg, const char *InfoPath);
+	bool UninstallFiles(const char *Sysroot, const char *FileListBuf);
+	bool CreatePackage(const struct Package *Job, const char *Directory);
+	bool VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDir);
+	bool ReverseInstallFiles(const char *Destination, const char *Sysroot, const char *FileListBuf);
+	bool CompressPackage(const char *PackageTempDir, const char *OutFile);
+	bool GetMetadata(const char *Path, struct Package *OutPkg);
+	const char *GetFileList(const char *InfoDir);
+}
 
 //files.cpp
-bool Files_FileCopy(const char *Source, const char *Destination, bool Overwrite, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode);
-bool Files_Mkdir(const char *Source, const char *Destination, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode);
-bool Files_SymlinkCopy(const char *Source, const char *Destination, bool Overwrite, const PkString &Sysroot , const uid_t UserID, const gid_t GroupID);
-bool Files_TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut);
+namespace Files
+{
+	bool FileCopy(const char *Source, const char *Destination, bool Overwrite, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode);
+	bool Mkdir(const char *Source, const char *Destination, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode);
+	bool SymlinkCopy(const char *Source, const char *Destination, bool Overwrite, const PkString &Sysroot , const uid_t UserID, const gid_t GroupID);
+	bool TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut);
+}
 
 //db.cpp
-bool DB_LoadPackage(const PkString &PackageID, const PkString &Arch, Package *Out, const PkString &Sysroot = "/");
-bool DB_SavePackage(const Package &Pkg, const char *FileListPath, const char *ChecksumsPath, const PkString &Sysroot = "/");
-bool DB_DeletePackage(const PkString &PackageID, const PkString &Arch, const PkString &Sysroot = "/");
-bool DB_InitializeEmptyDB(const PkString &Sysroot = "/");
-bool DB_GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *OutFileList, PkString *OutChecksums, const PkString &Sysroot = "/");
-bool DB_HasMultiArches(const char *PackageID, const PkString &Sysroot);
+namespace DB
+{
+	bool LoadPackage(const PkString &PackageID, const PkString &Arch, Package *Out, const PkString &Sysroot = "/");
+	bool SavePackage(const Package &Pkg, const char *FileListPath, const char *ChecksumsPath, const PkString &Sysroot = "/");
+	bool DeletePackage(const PkString &PackageID, const PkString &Arch, const PkString &Sysroot = "/");
+	bool InitializeEmptyDB(const PkString &Sysroot = "/");
+	bool GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *OutFileList, PkString *OutChecksums, const PkString &Sysroot = "/");
+	bool HasMultiArches(const char *PackageID, const PkString &Sysroot);
+}
+
 //passwd_w_sysroot.cpp
-struct PasswdUser PWSR_LookupUsername(const char *Sysroot, const char *Username);
-bool PWSR_LookupGroupname(const char *Sysroot, const char *Groupname, gid_t *OutGID);
-struct PasswdUser PWSR_LookupUserID(const char *Sysroot, const uid_t UID);
-PkString PWSR_LookupGroupID(const char *Sysroot, const gid_t GID);
+namespace PWSR
+{
+	struct PasswdUser LookupUsername(const char *Sysroot, const char *Username);
+	bool LookupGroupname(const char *Sysroot, const char *Groupname, gid_t *OutGID);
+	struct PasswdUser LookupUserID(const char *Sysroot, const uid_t UID);
+	PkString LookupGroupID(const char *Sysroot, const gid_t GID);
+}
 
 //web.cpp
-bool Web_Fetch(const PkString &URL, const PkString &OutPath);
-PkString Web_Fetch(const PkString &URL);
-
+namespace Web
+{
+	bool Fetch(const PkString &URL, const PkString &OutPath);
+	PkString Fetch(const PkString &URL);
+}
 //Globals
 #endif //_PACKRAT_H_

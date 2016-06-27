@@ -189,7 +189,7 @@ int main(int argc, char **argv)
 	{
 		case OP_MKDB:
 		{
-			return !DB_InitializeEmptyDB(Sysroot);
+			return !DB::InitializeEmptyDB(Sysroot);
 		}
 		case OP_CREATE:
 		{
@@ -210,7 +210,7 @@ int main(int argc, char **argv)
 				
 				SubStrings.Copy(CreationDirectory, TmpDir, sizeof InFile);
 			}
-			return !Package_CreatePackage(&Pkg, CreationDirectory);
+			return !PackageNS::CreatePackage(&Pkg, CreationDirectory);
 		}
 		case OP_INSTALL:
 		{
@@ -232,7 +232,7 @@ int main(int argc, char **argv)
 				SubStrings.Copy(InFile, TmpFile, sizeof InFile);
 			}
 			
-			return !Action_InstallPackage(InFile, Sysroot);
+			return !Action::InstallPackage(InFile, Sysroot);
 		}
 		case OP_REMOVE:
 		{
@@ -241,7 +241,7 @@ int main(int argc, char **argv)
 				fputs("Missing arguments. Need at least a package ID, optionally an architecture.\n", stderr);
 				return 1;
 			}
-			return !Action_UninstallPackage(Pkg.PackageID.c_str(), Pkg.Arch.empty() ? NULL : Pkg.Arch.c_str(), Sysroot);
+			return !Action::UninstallPackage(Pkg.PackageID.c_str(), Pkg.Arch.empty() ? NULL : Pkg.Arch.c_str(), Sysroot);
 		}
 		case OP_UPDATE:
 		{
@@ -262,7 +262,7 @@ int main(int argc, char **argv)
 				
 				SubStrings.Copy(InFile, TmpFile, sizeof InFile);
 			}
-			return !Action_UpdatePackage(InFile, Sysroot);
+			return !Action::UpdatePackage(InFile, Sysroot);
 		}
 		default:
 			break;
