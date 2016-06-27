@@ -425,6 +425,7 @@ bool Package::InstallFiles(const char *PackageDir, const char *Sysroot, const ch
 	while (SubStrings.Line.GetLine(CurLine, sizeof CurLine, &Iter))
 	{
 		Utils::FileListLine LineStruct = Utils::BreakdownFileListLine(CurLine);
+
 		gid_t GroupID = 0;
 		PasswdUser UserInfo = PWSR::LookupUsername(Sysroot, LineStruct.User);
 		uid_t &UserID = UserInfo.UserID;

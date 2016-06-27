@@ -30,8 +30,9 @@ struct PasswdUser PWSR::LookupUsername(const char *Sysroot, const char *Username
 	{
 		PasswdFile = Utils::Slurp("/etc/passwd", Sysroot);
 	}
-	catch (Utils::SlurpFailure&)
+	catch (Utils::SlurpFailure &S)
 	{
+		fprintf(stderr, "PWSR::LookupUsername() in " __FILE__ " line %u: Failed to slurp %s : %s\n", __LINE__, +(S.Sysroot + S.Path), +S.Reason);
 		return PasswdUser();
 	}
 	
@@ -85,8 +86,9 @@ struct PasswdUser PWSR::LookupUsername(const char *Sysroot, const char *Username
 	{
 		GroupFile = Utils::Slurp("/etc/group", Sysroot);
 	}
-	catch (Utils::SlurpFailure&)
+	catch (Utils::SlurpFailure &S)
 	{
+		fprintf(stderr, "PWSR::LookupUsername() in " __FILE__ " line %u: Failed to slurp %s : %s\n", __LINE__, +(S.Sysroot + S.Path), +S.Reason);
 		return PasswdUser();
 	}
 	
@@ -125,8 +127,9 @@ PkString PWSR::LookupGroupID(const char *Sysroot, const gid_t GID)
 	{
 		GroupFile = Utils::Slurp("/etc/group", Sysroot);
 	}
-	catch (Utils::SlurpFailure&)
+	catch (Utils::SlurpFailure &S)
 	{
+		fprintf(stderr, "PWSR::LookupGroupID() in " __FILE__ " line %u: Failed to slurp %s : %s\n", __LINE__, +(S.Sysroot + S.Path), +S.Reason);
 		return PkString();
 	}
 	
@@ -163,8 +166,9 @@ struct PasswdUser PWSR::LookupUserID(const char *Sysroot, const uid_t UID)
 	{
 		PasswdFile = Utils::Slurp("/etc/passwd", Sysroot);
 	}
-	catch (Utils::SlurpFailure&)
+	catch (Utils::SlurpFailure &S)
 	{
+		fprintf(stderr, "PWSR::LookupUserID() in " __FILE__ " line %u: Failed to slurp %s : %s\n", __LINE__, +(S.Sysroot + S.Path), +S.Reason);
 		return PasswdUser();
 	}
 	
@@ -222,8 +226,9 @@ struct PasswdUser PWSR::LookupUserID(const char *Sysroot, const uid_t UID)
 	{
 		GroupFile = Utils::Slurp("/etc/group", Sysroot);
 	}
-	catch (Utils::SlurpFailure&)
+	catch (Utils::SlurpFailure &S)
 	{
+		fprintf(stderr, "PWSR::LookupUserID() in " __FILE__ " line %u: Failed to slurp %s : %s\n", __LINE__, +(S.Sysroot + S.Path), +S.Reason);
 		return PasswdUser();
 	}
 	
@@ -262,8 +267,9 @@ bool PWSR::LookupGroupname(const char *Sysroot, const char *Groupname, gid_t *Ou
 	{
 		GroupFile = Utils::Slurp("/etc/group", Sysroot);
 	}
-	catch (Utils::SlurpFailure&)
+	catch (Utils::SlurpFailure &S)
 	{
+		fprintf(stderr, "PWSR::LookupGroupname() in " __FILE__ " line %u: Failed to slurp %s : %s\n", __LINE__, +(S.Sysroot + S.Path), +S.Reason);
 		return false;
 	}
 	
