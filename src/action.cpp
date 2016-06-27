@@ -234,7 +234,17 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	puts("Verifying file checksums...");
 	//Verify checksums.
 	
-	PkString ChecksumsBuf = Utils::Slurp(PkString(InfoPath) + "/checksums.txt");
+	PkString ChecksumsBuf;
+	try
+	{
+		ChecksumsBuf = Utils::Slurp(PkString(InfoPath) + "/checksums.txt");
+	}
+	catch (Utils::SlurpFailure &S)
+	{
+		fprintf(stderr, "Unable to slurp file \"%s\": %s\n", +(S.Sysroot + S.Path), +S.Reason);
+		DeleteTempDir(Path);
+		return false;
+	}
 	
 	if (!ChecksumsBuf || !PackageNS::VerifyChecksums(ChecksumsBuf, Path))
 	{
@@ -245,7 +255,19 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	}
 	
 	//Update files
-	PkString OldFileListBuf = Utils::Slurp(PkString(InfoPath) + "/filelist.txt");
+	PkString OldFileListBuf;
+	
+	try
+	{
+		OldFileListBuf = Utils::Slurp(PkString(InfoPath) + "/filelist.txt");
+	}
+	catch (Utils::SlurpFailure &S)
+	{
+		fprintf(stderr, "Unable to slurp file \"%s\": %s\n", +(S.Sysroot + S.Path), +S.Reason);
+		DeleteTempDir(Path);
+		return false;
+	}
+	
 	PkString NewFileListBuf;
 	
 	if (!OldFileListBuf || !DB::GetFilesInfo(OldPkg.PackageID, OldPkg.Arch, &NewFileListBuf, NULL, Sysroot))
@@ -351,7 +373,18 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 	
 	puts("Verifying file checksums...");
 	
-	PkString ChecksumsBuf = Utils::Slurp(InfoDirPath + "/checksums.txt");
+	PkString ChecksumsBuf;
+	try
+	{
+		ChecksumsBuf = Utils::Slurp(InfoDirPath + "/checksums.txt");
+	}
+	catch (Utils::SlurpFailure &S)
+	{
+		fprintf(stderr, "Unable to slurp file \"%s\": %s\n", +(S.Sysroot + S.Path), +S.Reason);
+		DeleteTempDir(Path);
+		return false;
+	}
+	
 	if (!ChecksumsBuf)
 	{
 		DeleteTempDir(Path);

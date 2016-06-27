@@ -61,7 +61,7 @@ static size_t ToStringWriteFunction(void *InStream, size_t PerUnit, size_t Membe
 }
 	
 	
-static bool Web::Fetch_Internal(const PkString &URL_, size_t (*WriteFunction)(void*, size_t, size_t, void*), const void *Data)
+static bool Fetch_Internal(const PkString &URL_, size_t (*WriteFunction)(void*, size_t, size_t, void*), const void *Data)
 {
 	PkString URL = URL_;
 	if (SubStrings.StartsWith("http://", URL)) URL = +PkString(URL) + sizeof "http://" - 1;
@@ -95,14 +95,14 @@ static bool Web::Fetch_Internal(const PkString &URL_, size_t (*WriteFunction)(vo
 
 bool Web::Fetch(const PkString &URL, const PkString &OutPath)
 {
-	return Web::Fetch_Internal(URL, FileOutWriteFunction, const_cast<PkString*>(&OutPath));
+	return Fetch_Internal(URL, FileOutWriteFunction, const_cast<PkString*>(&OutPath));
 }
 
 PkString Web::Fetch(const PkString &URL)
 {
 	PkString Data;
 	
-	if (!Web::Fetch_Internal(URL, ToStringWriteFunction, &Data)) return PkString();
+	if (!Fetch_Internal(URL, ToStringWriteFunction, &Data)) return PkString();
 	
 	return Data;
 }
