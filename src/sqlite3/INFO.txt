@@ -1,2 +1,0 @@
-This is the verbatim source code for SQLite. SQLite is released into the public domain by its authors.
-See http://sqlite.org/ for more information.

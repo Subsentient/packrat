@@ -25,7 +25,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <ctype.h>
 #include "packrat.h"
 #include "substrings/substrings.h"
-#include "sqlite3/sqlite3.h"
+#include <sqlite3.h>
 
 
 //This is an array so I can use sizeof instead of strlen

@@ -1,7 +1,5 @@
 src/*.o
 src/*.gch
-src/sqlite3/*.o
-src/sqlite3/*.gch
 src/substrings/libsubstrings.*
 src/substrings/*.o
 src/substrings/*.gch
