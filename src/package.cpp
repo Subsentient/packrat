@@ -892,28 +892,3 @@ bool Package::GetMetadata(const char *Path, PkgObj *OutPkg)
 	
 	return true;
 }
-
-const char *Package::GetFileList(const char *InfoDir)
-{ //Returns an allocated string that contains the file list.
-	char Path[4096];
-	
-	snprintf(Path, sizeof Path, "%s/filelist.txt", InfoDir);
-	
-	struct stat FileStat;
-	
-	if (stat(Path, &FileStat) != 0)
-	{
-		return NULL;
-	}
-	
-	FILE *Desc = fopen(Path, "rb");
-	
-	if (!Desc) return NULL;
-	
-	char *Buffer = (char*)malloc(FileStat.st_size + 1);
-	fread(Buffer, 1, FileStat.st_size, Desc);
-	fclose(Desc);
-	Buffer[FileStat.st_size] = '\0';
-	
-	return Buffer;
-}

@@ -102,6 +102,7 @@ namespace Action
 	bool UpdatePackage(const char *PkgPath, const char *Sysroot);
 	bool ReverseInstall(const char *PackageID, const char *Arch, const char *Sysroot);
 	bool CreateTempCacheDir(char *OutBuf, const unsigned OutBufSize, const char *Sysroot);
+	void DeleteTempCacheDir(const char *Path);
 }
 
 //config.cpp
@@ -126,7 +127,6 @@ namespace Package
 	bool ReverseInstallFiles(const char *Destination, const char *Sysroot, const char *FileListBuf);
 	bool CompressPackage(const char *PackageTempDir, const char *OutFile);
 	bool GetMetadata(const char *Path, PkgObj *OutPkg);
-	const char *GetFileList(const char *InfoDir);
 }
 
 //files.cpp

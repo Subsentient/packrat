@@ -25,7 +25,6 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 //Prototypes
 static bool ExecutePkgCmd(const char *Command, const char *Sysroot);
-static void DeleteTempDir(const char *Path);
 
 //Functions
 static bool ExecutePkgCmd(const char *Command, const char *Sysroot)
@@ -54,7 +53,7 @@ static bool ExecutePkgCmd(const char *Command, const char *Sysroot)
 	exit(1); //If we failed to execute, we return failure.
 }
 
-static void DeleteTempDir(const char *Path)
+void Action::DeleteTempCacheDir(const char *Path)
 {
 	puts("Cleaning up...");
 	char CmdBuf[2][4096] = {  "rm -rf ", "umount " };
@@ -72,7 +71,7 @@ bool Action::CreateTempCacheDir(char *OutBuf, const unsigned OutBufSize, const c
 	unsigned DirNum2 = rand();
 	unsigned DirNum3 = rand();
 	
-	snprintf(OutBuf, OutBufSize, "%s/var/packrat/cache/packrat_cache_%u.%u.%u", Sysroot, DirNum1, DirNum2, DirNum3);
+	snprintf(OutBuf, OutBufSize, "%s/var/packrat/cache/packrat_cache_%u.%u.%u", Sysroot ? Sysroot : "", DirNum1, DirNum2, DirNum3);
 	
 	//Now create the directory.
 	if (mkdir(OutBuf, 0700) != 0)
@@ -126,7 +125,7 @@ bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char 
 	if (mkdir(FilesDir, 0755) != 0 && mkdir(InfoDir, 0755) != 0)
 	{
 		fputs("Failed to create subdirectories of cache directory!\n", stderr);
-		DeleteTempDir(TempDir);
+		Action::DeleteTempCacheDir(TempDir);
 		return false;
 	}
 	
@@ -134,7 +133,7 @@ bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char 
 	if (!Package::ReverseInstallFiles(TempDir, Sysroot, FileListBuf))
 	{
 		fputs("Failed to reverse install files.\n", stderr);
-		DeleteTempDir(TempDir);
+		Action::DeleteTempCacheDir(TempDir);
 		return false;
 	}
 	
@@ -144,7 +143,7 @@ bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char 
 	if (!Package::VerifyChecksums(ChecksumsBuf, FilesDir))
 	{
 		fputs("Checksums for acquired reverse-installation files do not match. Cannot continue.\n", stderr);
-		DeleteTempDir(TempDir);
+		Action::DeleteTempCacheDir(TempDir);
 		return false;
 	
 	}
@@ -153,7 +152,7 @@ bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char 
 	if (!Package::SaveMetadata(&Pkg, InfoDir))
 	{
 		fputs("Failed to store package metadata for reverse installation. Cannot continue.\n", stderr);
-		DeleteTempDir(TempDir);
+		Action::DeleteTempCacheDir(TempDir);
 		return false;
 	}
 	
@@ -171,7 +170,7 @@ bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char 
 		fputs("Failed to compress package generated via reverse installation.\n", stderr);
 	}
 
-	DeleteTempDir(TempDir);
+	Action::DeleteTempCacheDir(TempDir);
 	return true;
 	
 }
@@ -203,14 +202,14 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	if (!Package::GetMetadata(InfoPath, &OldPkg))
 	{
 		fputs("ERROR: Failed to read package metadata!\n", stderr);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
 	if (!Config::ArchPresent(OldPkg.Arch))
 	{ //While not explicitly needed for the update operation, it gives the user some useful info.
 		fprintf(stderr, "Package's architecture %s not supported on this system.\n", +OldPkg.Arch);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -219,7 +218,7 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	if (!DB::LoadPackage(OldPkg.PackageID, OldPkg.Arch, &Pkg, Sysroot))
 	{
 		fprintf(stderr, "Package %s.%s is not installed, so can't update it.\n", +OldPkg.PackageID, +OldPkg.Arch);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -227,7 +226,7 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 		OldPkg.PackageGeneration == Pkg.PackageGeneration)
 	{
 		fputs("This version of the package is already installed.\n", stderr);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -242,7 +241,7 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	catch (Utils::SlurpFailure &S)
 	{
 		fprintf(stderr, "Unable to slurp file \"%s\": %s\n", +(S.Sysroot + S.Path), +S.Reason);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -250,7 +249,7 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	{
 		fprintf(stderr, "%s_%s-%u.%s: Package file checksum failure; package may be damaged.\n",
 				Pkg.PackageID.c_str(), Pkg.VersionString.c_str(), Pkg.PackageGeneration, Pkg.Arch.c_str());
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -264,7 +263,7 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	catch (Utils::SlurpFailure &S)
 	{
 		fprintf(stderr, "Unable to slurp file \"%s\": %s\n", +(S.Sysroot + S.Path), +S.Reason);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -273,7 +272,7 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	if (!OldFileListBuf || !DB::GetFilesInfo(OldPkg.PackageID, OldPkg.Arch, &NewFileListBuf, NULL, Sysroot))
 	{
 		fputs("ERROR: Unable to compare file lists between old and new packages.\n", stderr);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -290,7 +289,7 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	if (!Package::UpdateFiles(Path, Sysroot, OldFileListBuf, NewFileListBuf))
 	{
 		fputs("ERROR: File update failed.\n", stderr);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -307,11 +306,11 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	if (!DB::SavePackage(Pkg, PkString(InfoPath) + "/filelist.txt", PkString(InfoPath) + "/checksums.txt", Sysroot))
 	{
 		fputs("CRITICAL ERROR: Failed to save package database information!\n", stderr);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 	}
 	
 	//Delete temporary directory
-	DeleteTempDir(Path);
+	Action::DeleteTempCacheDir(Path);
 	
 	printf("Package %s.%s updated to \"%s_%s-%u.%s\"\n", +Pkg.PackageID, +Pkg.Arch, +Pkg.PackageID, +Pkg.VersionString, Pkg.PackageGeneration, +Pkg.Arch);
 	
@@ -350,7 +349,7 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 	if (!Package::GetMetadata(InfoDirPath, &Pkg))
 	{
 		fputs("ERROR: Failed to read package metadata!\n", stderr);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -360,14 +359,14 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 	if (DB::LoadPackage(Pkg.PackageID, Pkg.Arch, &ExistingPkg, Sysroot ? Sysroot : "/"))
 	{
 		fprintf(stderr, "Package %s.%s is already installed. The installed version is %s_%s-%u.%s\n", +Pkg.PackageID, +Pkg.Arch, +ExistingPkg.PackageID, +ExistingPkg.VersionString, ExistingPkg.PackageGeneration, +ExistingPkg.Arch);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 
 	if (!Config::ArchPresent(Pkg.Arch))
 	{
 		fprintf(stderr, "Package's architecture %s not supported on this system.\n", +Pkg.Arch);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -381,13 +380,13 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 	catch (Utils::SlurpFailure &S)
 	{
 		fprintf(stderr, "Unable to slurp file \"%s\": %s\n", +(S.Sysroot + S.Path), +S.Reason);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
 	if (!ChecksumsBuf)
 	{
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -397,7 +396,7 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 	{
 		fprintf(stderr, "%s_%s-%u.%s: Package file checksum failure; package may be damaged.\n",
 				+Pkg.PackageID, +Pkg.VersionString, Pkg.PackageGeneration, +Pkg.Arch);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -420,13 +419,13 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 	catch (Utils::SlurpFailure &S)
 	{
 		fprintf(stderr, "Failed to slurp file \"%s\": %s\n", +(S.Sysroot + S.Path), +S.Reason);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 	}
 	
 	if (!FilelistBuf)
 	{
 		fputs("Unable to open file list for scanning!\n", stderr);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -436,7 +435,7 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 	if (!Package::InstallFiles(Path, Sysroot, FilelistBuf))
 	{
 		fputs("ERROR: Failed to install files! Aborting installation.\n", stderr);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
@@ -456,12 +455,12 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 	if (!DB::SavePackage(Pkg, InfoDirPath + "/filelist.txt", InfoDirPath + "/checksums.txt", Sysroot ? Sysroot : ""))
 	{
 		fputs("CRITICAL ERROR: Failed to save package database information!\n", stderr);
-		DeleteTempDir(Path);
+		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
 	
 	//Delete temporary directory
-	DeleteTempDir(Path);
+	Action::DeleteTempCacheDir(Path);
 	
 	printf("Package %s_%s-%u.%s installed successfully.\n", +Pkg.PackageID, +Pkg.VersionString, Pkg.PackageGeneration, +Pkg.Arch);
 	

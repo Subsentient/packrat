@@ -4,6 +4,7 @@ CXX=g++
 CXXFLAGS=-std=gnu++98 -pedantic -Wall -g3 -O0 -ftrapv -fstrict-aliasing -Wstrict-aliasing -Wno-long-long -fstack-protector
 CFLAGS=-std=gnu99 -pedantic -Wall -g -O3 -ftrapv -fstrict-aliasing -Wstrict-aliasing -fstack-protector
 LDFLAGS=-lcrypto substrings/libsubstrings.a -lsqlite3
+#We use libcrypto to compute checksums, and sqlite is our database system.
 
 all: config action main package db files pwsr
 	$(MAKE) -C substrings static

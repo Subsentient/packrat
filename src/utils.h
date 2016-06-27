@@ -24,6 +24,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #endif //_PACKRAT_H_
 
 #include <string.h>
+#include <stdio.h>
 
 #include "substrings/substrings.h" //Has header guards, don't worry.
 namespace Utils
