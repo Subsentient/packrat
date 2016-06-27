@@ -36,7 +36,7 @@ static bool BuildFileList(const char *const Directory_, FILE *const OutDesc, boo
 static bool MakeAllChecksums(const char *Directory, const char *FileListPath, FILE *const OutDesc);
 static bool MkPkgCloneFiles(const char *PackageDir, const char *InputDir, const char *FileList);
 	
-bool PackageNS::MountPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize)
+bool Package::MountPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize)
 {	
 	if (!Action::CreateTempCacheDir(PkgDirPath, PkgDirPathSize, Sysroot))
 	{
@@ -75,7 +75,7 @@ bool PackageNS::MountPackage(const char *AbsolutePathToPkg, const char *const Sy
 	return WEXITSTATUS(RawExitStatus) == 0;
 }
 
-bool PackageNS::GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize)
+bool Package::GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize)
 { //Basically just a wrapper function to easily read in the ascii from a package config file.
 	char Path[4096];
 	
@@ -105,7 +105,7 @@ bool PackageNS::GetPackageConfig(const char *const DirPath, const char *const Fi
 	return true;
 }
 
-bool PackageNS::CreatePackage(const struct Package *Job, const char *Directory)
+bool Package::CreatePackage(const PkgObj *Job, const char *Directory)
 {
 	//cd to the new directory
 	printf("---\nCreating package from directory %s\n---\nPackageID=%s\nVersionString=%s\nArch=%s\nPackageGeneration=%u\n",
@@ -182,7 +182,7 @@ bool PackageNS::CreatePackage(const struct Package *Job, const char *Directory)
 	
 	puts("Building info/metadata.txt...");
 	//Save package metadata.
-	if (!PackageNS::SaveMetadata(Job, PackageInfoDir))
+	if (!Package::SaveMetadata(Job, PackageInfoDir))
 	{
 		fprintf(stderr, "Failed to save metadata.txt\n");
 		return false;
@@ -198,7 +198,7 @@ bool PackageNS::CreatePackage(const struct Package *Job, const char *Directory)
 	
 	puts("Creating .pkrt file...");
 	//Compress package.
-	if (!PackageNS::CompressPackage(PackageFullName, NULL))
+	if (!Package::CompressPackage(PackageFullName, NULL))
 	{
 		fprintf(stderr, "Failed to create .pkrt package.\n");
 		return false;
@@ -217,7 +217,7 @@ bool PackageNS::CreatePackage(const struct Package *Job, const char *Directory)
 	
 }
 
-bool PackageNS::CompressPackage(const char *PackageTempDir, const char *OutFile)
+bool Package::CompressPackage(const char *PackageTempDir, const char *OutFile)
 {
 	char PackageName[4096];
 	
@@ -253,7 +253,7 @@ bool PackageNS::CompressPackage(const char *PackageTempDir, const char *OutFile)
 	return WEXITSTATUS(RawExitStatus) == 0;
 }
 
-bool PackageNS::SaveMetadata(const struct Package *Pkg, const char *InfoPath)
+bool Package::SaveMetadata(const PkgObj *Pkg, const char *InfoPath)
 {
 	char MetadataPath[4096];
 	
@@ -314,13 +314,13 @@ bool PackageNS::SaveMetadata(const struct Package *Pkg, const char *InfoPath)
 	return true;
 }
 
-bool PackageNS::UpdateFiles(const char *PackageDir, const char *Sysroot, const char *OldFileListBuf, const char *NewFileListBuf)
+bool Package::UpdateFiles(const char *PackageDir, const char *Sysroot, const char *OldFileListBuf, const char *NewFileListBuf)
 { //Deletes files that no longer exist in the newer version of the package, and then overwrites the remaining with new data.
 	if (!OldFileListBuf || !NewFileListBuf) return false;
 	
 	//First thing is write the new versions of the files.
 	
-	if (!PackageNS::InstallFiles(PackageDir, Sysroot, NewFileListBuf))
+	if (!Package::InstallFiles(PackageDir, Sysroot, NewFileListBuf))
 	{
 		return false;
 	}
@@ -365,7 +365,7 @@ bool PackageNS::UpdateFiles(const char *PackageDir, const char *Sysroot, const c
 
 }
 
-bool PackageNS::ReverseInstallFiles(const char *Destination, const char *Sysroot, const char *FileListBuf)
+bool Package::ReverseInstallFiles(const char *Destination, const char *Sysroot, const char *FileListBuf)
 {
 	char CurLine[4096];
 	const char *Iter = FileListBuf;
@@ -416,7 +416,7 @@ bool PackageNS::ReverseInstallFiles(const char *Destination, const char *Sysroot
 	return true;
 }
 
-bool PackageNS::InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf)
+bool Package::InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf)
 {
 	char CurLine[4096];
 	const char *Iter = FileListBuf;
@@ -466,7 +466,7 @@ bool PackageNS::InstallFiles(const char *PackageDir, const char *Sysroot, const 
 	return true;
 }
 
-bool PackageNS::UninstallFiles(const char *Sysroot, const char *FileListBuf)
+bool Package::UninstallFiles(const char *Sysroot, const char *FileListBuf)
 {
 	char CurLine[4096];
 	struct stat FileStat;
@@ -608,7 +608,7 @@ static bool MakeAllChecksums(const char *Directory, const char *FileListPath, FI
 		struct stat TempStat;
 		if (lstat(PathBuf, &TempStat) != 0 || S_ISLNK(TempStat.st_mode)) continue;
 		
-		PkString Checksum = PackageNS::MakeFileChecksum(PathBuf);
+		PkString Checksum = Package::MakeFileChecksum(PathBuf);
 		
 		//Build the checksum.
 		if (!Checksum)
@@ -627,7 +627,7 @@ static bool MakeAllChecksums(const char *Directory, const char *FileListPath, FI
 }
 	
 	
-PkString PackageNS::MakeFileChecksum(const char *FilePath)
+PkString Package::MakeFileChecksum(const char *FilePath)
 { //Fairly fast function to get a sha1 of a file.
 	unsigned char Hash[SHA_DIGEST_LENGTH];
 	
@@ -673,7 +673,7 @@ PkString PackageNS::MakeFileChecksum(const char *FilePath)
 	return Buf;
 }
 
-bool PackageNS::VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDir)
+bool Package::VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDir)
 {
 	char Line[4096];
 	const char *Iter = ChecksumBuf;
@@ -690,7 +690,7 @@ bool PackageNS::VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDi
 			return false;
 		}
 		
-		PkString NewChecksum = PackageNS::MakeFileChecksum(FilesDir + '/' + Path);
+		PkString NewChecksum = Package::MakeFileChecksum(FilesDir + '/' + Path);
 		
 		if (!SubStrings.Compare(NewChecksum, Checksum))
 		{
@@ -791,7 +791,7 @@ static bool BuildFileList(const char *const Directory_, FILE *const OutDesc, boo
 	return true;
 }
 
-bool PackageNS::GetMetadata(const char *Path, struct Package *OutPkg)
+bool Package::GetMetadata(const char *Path, PkgObj *OutPkg)
 { //Loads basic metadata info.
 	
 	if (!Path) Path = ".";
@@ -892,7 +892,7 @@ bool PackageNS::GetMetadata(const char *Path, struct Package *OutPkg)
 	return true;
 }
 
-const char *PackageNS::GetFileList(const char *InfoDir)
+const char *Package::GetFileList(const char *InfoDir)
 { //Returns an allocated string that contains the file list.
 	char Path[4096];
 	

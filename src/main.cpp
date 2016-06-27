@@ -41,7 +41,7 @@ int main(int argc, char **argv)
 	setvbuf(stderr, NULL, _IONBF, 0);
 	enum OperationMode Mode = OP_NONE;
 	
-	struct Package Pkg = { 0 }; //Zero-initialized
+	struct PkgObj Pkg = { 0 }; //Zero-initialized
 	
 	if (getuid() != 0)
 	{
@@ -210,7 +210,7 @@ int main(int argc, char **argv)
 				
 				SubStrings.Copy(CreationDirectory, TmpDir, sizeof InFile);
 			}
-			return !PackageNS::CreatePackage(&Pkg, CreationDirectory);
+			return !Package::CreatePackage(&Pkg, CreationDirectory);
 		}
 		case OP_INSTALL:
 		{

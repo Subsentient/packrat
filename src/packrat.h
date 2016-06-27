@@ -72,7 +72,7 @@ struct PasswdUser
 	operator bool(void) const { return *Username; }
 };
 
-struct Package
+struct PkgObj
 {
 	unsigned PackageGeneration; //The build number of this package, so we can fix busted packages of the same version of software.
 
@@ -112,20 +112,20 @@ namespace Config
 }
 
 //package.cpp
-namespace PackageNS
+namespace Package
 {
 	bool MountPackage(const char *AbsolutePathToPkg, const char *const Sysroot, char *PkgDirPath, unsigned PkgDirPathSize);
 	bool GetPackageConfig(const char *const DirPath, const char *const File, char *Data, unsigned DataOutSize);
 	PkString MakeFileChecksum(const char *FilePath);
 	bool InstallFiles(const char *PackageDir, const char *Sysroot, const char *FileListBuf);
 	bool UpdateFiles(const char *PackageDir, const char *Sysroot, const char *OldFileListBuf, const char *NewFileListBuf);
-	bool SaveMetadata(const struct Package *Pkg, const char *InfoPath);
+	bool SaveMetadata(const PkgObj *Pkg, const char *InfoPath);
 	bool UninstallFiles(const char *Sysroot, const char *FileListBuf);
-	bool CreatePackage(const struct Package *Job, const char *Directory);
+	bool CreatePackage(const PkgObj *Job, const char *Directory);
 	bool VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDir);
 	bool ReverseInstallFiles(const char *Destination, const char *Sysroot, const char *FileListBuf);
 	bool CompressPackage(const char *PackageTempDir, const char *OutFile);
-	bool GetMetadata(const char *Path, struct Package *OutPkg);
+	bool GetMetadata(const char *Path, PkgObj *OutPkg);
 	const char *GetFileList(const char *InfoDir);
 }
 
@@ -141,8 +141,8 @@ namespace Files
 //db.cpp
 namespace DB
 {
-	bool LoadPackage(const PkString &PackageID, const PkString &Arch, Package *Out, const PkString &Sysroot = "/");
-	bool SavePackage(const Package &Pkg, const char *FileListPath, const char *ChecksumsPath, const PkString &Sysroot = "/");
+	bool LoadPackage(const PkString &PackageID, const PkString &Arch, PkgObj *Out, const PkString &Sysroot = "/");
+	bool SavePackage(const PkgObj &Pkg, const char *FileListPath, const char *ChecksumsPath, const PkString &Sysroot = "/");
 	bool DeletePackage(const PkString &PackageID, const PkString &Arch, const PkString &Sysroot = "/");
 	bool InitializeEmptyDB(const PkString &Sysroot = "/");
 	bool GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString *OutFileList, PkString *OutChecksums, const PkString &Sysroot = "/");

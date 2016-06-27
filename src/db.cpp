@@ -45,10 +45,10 @@ static const char InstalledDBSchema[] = "create table installed (\n"
 										"Checksums text not null);";
 
 //Prototypes
-static bool ProcessColumn(sqlite3_stmt *Statement, Package *Pkg, const int Index);
+static bool ProcessColumn(sqlite3_stmt *Statement, PkgObj *Pkg, const int Index);
 
 //Function definitions
-static bool ProcessColumn(sqlite3_stmt *Statement, Package *Pkg, const int Index)
+static bool ProcessColumn(sqlite3_stmt *Statement, PkgObj *Pkg, const int Index)
 {
 	const PkString &Name = sqlite3_column_name(Statement, Index);
 	
@@ -100,7 +100,7 @@ static bool ProcessColumn(sqlite3_stmt *Statement, Package *Pkg, const int Index
 	return true;
 }
 
-bool DB::SavePackage(const Package &Pkg, const char *FileListPath, const char *ChecksumsPath, const PkString &Sysroot)
+bool DB::SavePackage(const PkgObj &Pkg, const char *FileListPath, const char *ChecksumsPath, const PkString &Sysroot)
 {
 	sqlite3 *Handle = NULL;
 	
@@ -137,7 +137,7 @@ bool DB::SavePackage(const Package &Pkg, const char *FileListPath, const char *C
 
 	int Indice = 1;
 	
-	const PkString NoDescription = "No description provided for this package.";
+	const char NoDescription[] = "No description provided for this package.";
 	
 	sqlite3_bind_text(Statement, Indice++, Pkg.PackageID, Pkg.PackageID.size(), SQLITE_STATIC);
 	sqlite3_bind_text(Statement, Indice++, Pkg.Arch, Pkg.Arch.size(), SQLITE_STATIC);
@@ -145,7 +145,7 @@ bool DB::SavePackage(const Package &Pkg, const char *FileListPath, const char *C
 	sqlite3_bind_int(Statement, Indice++, Pkg.PackageGeneration);
 
 	Pkg.Description ? sqlite3_bind_text(Statement, Indice++, Pkg.Description, Pkg.Description.size(), SQLITE_STATIC)
-					: sqlite3_bind_text(Statement, Indice++, NoDescription, NoDescription.size(), SQLITE_STATIC);
+					: sqlite3_bind_text(Statement, Indice++, NoDescription, sizeof NoDescription - 1, SQLITE_STATIC);
 
 	Pkg.Cmds.PreInstall ? sqlite3_bind_text(Statement, Indice++, Pkg.Cmds.PreInstall, Pkg.Cmds.PreInstall.size(), SQLITE_STATIC)
 						: sqlite3_bind_null(Statement, Indice++);
@@ -280,7 +280,7 @@ bool DB::GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString 
 }
 
 
-bool DB::LoadPackage(const PkString &PackageID, const PkString &Arch, Package *Out, const PkString &Sysroot)
+bool DB::LoadPackage(const PkString &PackageID, const PkString &Arch, PkgObj *Out, const PkString &Sysroot)
 { //Does NOT get the file list or checksums, but everything else.
 	if (!PackageID || !Arch || !Out) return false; //Gotta be pretty fucktarded to deliberately do this.
 	
