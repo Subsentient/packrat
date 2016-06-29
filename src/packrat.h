@@ -34,6 +34,20 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #define DB_TAGS_PATH DB_DIRECTORY "tags/"
 #define DB_MAIN_PATH DB_DIRECTORY "installed.db"
 #define DB_CATALOGS_DIRECTORY DB_DIRECTORY "catalogs/"
+
+#define CONSOLE_CTL_SAVESTATE "\033[s"
+#define CONSOLE_CTL_RESTORESTATE "\033[u"
+
+#define CONSOLE_COLOR_BLACK "\033[30m"
+#define CONSOLE_COLOR_RED "\033[31m"
+#define CONSOLE_COLOR_GREEN "\033[32m"
+#define CONSOLE_COLOR_YELLOW "\033[33m"
+#define CONSOLE_COLOR_BLUE "\033[34m"
+#define CONSOLE_COLOR_MAGENTA "\033[35m"
+#define CONSOLE_COLOR_CYAN "\033[36m"
+#define CONSOLE_COLOR_WHITE "\033[37m"
+#define CONSOLE_ENDCOLOR "\033[0m"
+
 //Structs
 
 
@@ -172,6 +186,13 @@ namespace Catalog
 {
 	bool DownloadCatalogs(const char *Sysroot);
 	extern std::vector<PkString> MirrorDomains;
+}
+
+namespace Console
+{
+	void InitActions(const char *InSubject = "");
+	void SetActionSubject(const char *InSubject = "");
+	void SetCurrentAction(const char *InAction, FILE *OutDescriptor = stdout, const char *Color = NULL);
 }
 
 //Globals

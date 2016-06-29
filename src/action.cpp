@@ -55,7 +55,6 @@ static bool ExecutePkgCmd(const char *Command, const char *Sysroot)
 
 void Action::DeleteTempCacheDir(const char *Path)
 {
-	puts("Cleaning up...");
 	char CmdBuf[2][4096] = {  "rm -rf ", "umount " };
 	
 	SubStrings.Cat(CmdBuf[0], Path, sizeof CmdBuf);
@@ -85,6 +84,8 @@ bool Action::CreateTempCacheDir(char *OutBuf, const unsigned OutBufSize, const c
 
 bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char *Sysroot)
 { //Turns files from an installation into a package.
+	
+	Console::InitActions();
 	if (!Config::LoadConfig(Sysroot))
 	{
 		fputs("Failed to load packrat configuration.\n", stderr);
@@ -93,12 +94,16 @@ bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char 
 	
 	PkgObj Pkg;
 	
+	Console::SetCurrentAction("Reading database");
+	
 	if (!DB::LoadPackage(PackageID, Arch, &Pkg, Sysroot))
 	{
 		fprintf(stderr, "Package %s.%s is not installed. A reverse installation requires a package to be installed.\n", PackageID, Arch);
 		return false;
 	}
 	
+	Console::SetActionSubject(Pkg.PackageID + "." + Pkg.Arch);
+
 	PkString FileListBuf, ChecksumsBuf;
 	
 	if (!DB::GetFilesInfo(Pkg.PackageID, Pkg.Arch, &FileListBuf, &ChecksumsBuf, Sysroot))
@@ -108,6 +113,8 @@ bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char 
 	}
 	
 	char *TempBuf = new char[4096];
+	
+	Console::SetCurrentAction("Creating needed working space");
 	
 	if (!Action::CreateTempCacheDir(TempBuf, 4096, Sysroot))
 	{
@@ -129,6 +136,8 @@ bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char 
 		return false;
 	}
 	
+	Console::SetCurrentAction("Gathering required files from system");
+	
 	//In this way, we copy files from the sysroot BEFORE verifying them.
 	if (!Package::ReverseInstallFiles(TempDir, Sysroot, FileListBuf))
 	{
@@ -139,6 +148,7 @@ bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char 
 	
 	
 	//Verify acquired reverse installation file checksums.
+	Console::SetCurrentAction("Verifying checksums of acquired files");
 	
 	if (!Package::VerifyChecksums(ChecksumsBuf, FilesDir))
 	{
@@ -147,6 +157,8 @@ bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char 
 		return false;
 	
 	}
+	
+	Console::SetCurrentAction("Storing metadata for new package");
 	
 	//Copy metadata.
 	if (!Package::SaveMetadata(&Pkg, InfoDir))
@@ -165,18 +177,29 @@ bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char 
 	snprintf(ToOut, sizeof OutFile - SubStrings.Length(OutFile), "%s_%s-%u.%s.reverseinstall.pkrt",
 			Pkg.PackageID.c_str(), Pkg.VersionString.c_str(), Pkg.PackageGeneration, Pkg.Arch.c_str());
 	
+	Console::SetCurrentAction("Compressing package");
+	
 	if (!Package::CompressPackage(TempDir, OutFile))
 	{
 		fputs("Failed to compress package generated via reverse installation.\n", stderr);
 	}
-
+	
+	Console::SetCurrentAction("Cleaning up");
+	
 	Action::DeleteTempCacheDir(TempDir);
+	
+	PkString Msg = PkString() + "Successfully generated package " + OutFile + "\n";
+	
+	Console::SetCurrentAction(Msg);
+	
 	return true;
 	
 }
 
 bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 {
+	Console::InitActions();
+
 	char Path[4096];
 	
 	if (!Config::LoadConfig(Sysroot))
@@ -185,7 +208,8 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
-	puts("Mounting package...");
+	Console::SetCurrentAction("Mounting package");
+	
 	if (!Package::MountPackage(PkgPath, Sysroot, Path, sizeof Path))
 	{
 		fputs("ERROR: Failed to mount package to temporary directory!\n", stderr);
@@ -198,13 +222,17 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	
 	PkgObj OldPkg;
 	
-	puts("Reading package information...");
+	Console::SetCurrentAction("Reading package metadata");
+	
 	if (!Package::GetMetadata(InfoPath, &OldPkg))
 	{
 		fputs("ERROR: Failed to read package metadata!\n", stderr);
 		Action::DeleteTempCacheDir(Path);
 		return false;
 	}
+	
+	
+	Console::SetActionSubject(OldPkg.PackageID + "." + OldPkg.Arch);
 	
 	if (!Config::ArchPresent(OldPkg.Arch))
 	{ //While not explicitly needed for the update operation, it gives the user some useful info.
@@ -230,7 +258,7 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
-	puts("Verifying file checksums...");
+	Console::SetCurrentAction("Verifying file checksums");
 	//Verify checksums.
 	
 	PkString ChecksumsBuf;
@@ -278,14 +306,16 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	
 	if (*Pkg.Cmds.PreUpdate)
 	{
-		fputs("Executing pre-update commands...\n", stdout);
+		Console::SetCurrentAction("Executing pre-update commands");
+		
 		if (!ExecutePkgCmd(Pkg.Cmds.PreUpdate, Sysroot))
 		{
 			fputs("WARNING: Failure exexuting pre-update commands.\n", stderr);
 		}
 	}
 	
-	puts("Updating files...");
+	Console::SetCurrentAction("Updating files");
+	
 	if (!Package::UpdateFiles(Path, Sysroot, OldFileListBuf, NewFileListBuf))
 	{
 		fputs("ERROR: File update failed.\n", stderr);
@@ -295,14 +325,15 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	
 	if (*Pkg.Cmds.PostUpdate)
 	{
-		fputs("Executing post-update commands...\n", stdout);
+		Console::SetCurrentAction("Executing post-update commands");
+		
 		if (!ExecutePkgCmd(Pkg.Cmds.PostUpdate, Sysroot))
 		{
 			fputs("WARNING: Failure exexuting post-update commands.\n", stderr);
 		}
 	}
 	
-	puts("Updating database...");
+	Console::SetCurrentAction("Updating database");
 	if (!DB::SavePackage(Pkg, PkString(InfoPath) + "/filelist.txt", PkString(InfoPath) + "/checksums.txt", Sysroot))
 	{
 		fputs("CRITICAL ERROR: Failed to save package database information!\n", stderr);
@@ -312,14 +343,17 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	//Delete temporary directory
 	Action::DeleteTempCacheDir(Path);
 	
-	printf("Package %s.%s updated to \"%s_%s-%u.%s\"\n", +Pkg.PackageID, +Pkg.Arch, +Pkg.PackageID, +Pkg.VersionString, Pkg.PackageGeneration, +Pkg.Arch);
+	char Buf[2048];
+	snprintf(Buf, sizeof Buf, "Package %s.%s updated to \"%s_%s-%u.%s\"\n", +Pkg.PackageID, +Pkg.Arch, +Pkg.PackageID, +Pkg.VersionString, Pkg.PackageGeneration, +Pkg.Arch);
 	
+	Console::SetCurrentAction(Buf);
 	return true;
 }
 
 bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 {
-	
+	Console::InitActions();
+
 	char Path[4096]; //Will contain a value from Package::MountPackage()
 	
 	//Load configuration.
@@ -329,7 +363,7 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 
-	puts("Mounting package...");
+	Console::SetCurrentAction("Mounting package");
 	
 	//Extract the pkrt file into a temporary directory, which is given back to us in Path.
 	if (!Package::MountPackage(PkgPath, Sysroot, Path, sizeof Path))
@@ -337,13 +371,13 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 		fputs("ERROR: Failed to mount package to temporary directory!\n", stderr);
 		return false;
 	}
-	
+	PkString Derp = PkString();
 	const PkString InfoDirPath = PkString(Path) + "/info";
 	const PkString FilesDirPath = PkString(Path) + "/files";
 	
 	struct PkgObj Pkg = { 0 }; //Zero initialize the entire blob.
 	
-	puts("Reading package information...");
+	Console::SetCurrentAction("Reading package metadata");
 	
 	//Check metadata to see if the architecture is supported.
 	if (!Package::GetMetadata(InfoDirPath, &Pkg))
@@ -353,6 +387,7 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
+	Console::SetActionSubject(Pkg.PackageID + "." + Pkg.Arch);
 	//Already installed?
 	PkgObj ExistingPkg = { 0 };
 	
@@ -370,7 +405,7 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
-	puts("Verifying file checksums...");
+	Console::SetCurrentAction("Verifying file checksums");
 	
 	PkString ChecksumsBuf;
 	try
@@ -403,7 +438,7 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 	//Process the pre-install command.
 	if (*Pkg.Cmds.PreInstall)
 	{
-		fputs("Executing pre-install commands...\n", stdout);
+		Console::SetCurrentAction("Executing pre-install commands");
 		if (!ExecutePkgCmd(Pkg.Cmds.PreInstall, Sysroot))
 		{
 			fputs("WARNING: Failure exexuting pre-install commands.\n", stderr);
@@ -429,7 +464,7 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 		return false;
 	}
 	
-	puts("Installing files...");
+	Console::SetCurrentAction("Installing files");
 	
 	//Install the files.
 	if (!Package::InstallFiles(Path, Sysroot, FilelistBuf))
@@ -450,7 +485,7 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 	}
 	
 	///Update the database.
-	fputs("Updating the package database...\n", stdout);
+	Console::SetCurrentAction("Updating package database");
 	
 	if (!DB::SavePackage(Pkg, InfoDirPath + "/filelist.txt", InfoDirPath + "/checksums.txt", Sysroot ? Sysroot : ""))
 	{
@@ -462,7 +497,10 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 	//Delete temporary directory
 	Action::DeleteTempCacheDir(Path);
 	
-	printf("Package %s_%s-%u.%s installed successfully.\n", +Pkg.PackageID, +Pkg.VersionString, Pkg.PackageGeneration, +Pkg.Arch);
+	char Buf[2048];
+	snprintf(Buf, sizeof Buf, "Package %s_%s-%u.%s installed successfully\n", +Pkg.PackageID, +Pkg.VersionString, Pkg.PackageGeneration, +Pkg.Arch);
+	
+	Console::SetCurrentAction(Buf);
 	
 	//Again, DB::Add is pointless with DB::Shutdown right after, but we're keeping it for now.
 	return true;
@@ -470,6 +508,8 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 
 bool Action::UninstallPackage(const char *PackageID, const char *Arch, const char *Sysroot)
 {
+	Console::InitActions(PkString(PackageID) + (Arch ? +(PkString(".") + Arch) : ""));
+
 	//Load config
 	if (!Config::LoadConfig(Sysroot))
 	{
@@ -486,13 +526,13 @@ bool Action::UninstallPackage(const char *PackageID, const char *Arch, const cha
 
 	PkgObj Pkg;
 	
+	Console::SetCurrentAction("Reading database");
+
 	if (!DB::LoadPackage(PackageID, Arch, &Pkg, Sysroot ? Sysroot : ""))
 	{
 		fprintf(stderr, "Package %s%s%s is not installed.\n", PackageID, Arch ? "." : "", Arch ? Arch : "");
 		return false;
 	}
-
-	puts("Loading list of files to be deleted...");
 	
 	//Got it. Now load the file list.
 	PkString FileListBuf;
@@ -505,14 +545,15 @@ bool Action::UninstallPackage(const char *PackageID, const char *Arch, const cha
 	//Run pre-uninstall commands.
 	if (Pkg.Cmds.PreUninstall)
 	{
-		fputs("Executing pre-uninstall commands...\n", stdout);
+		Console::SetCurrentAction("Executing pre-uninstall commands");
 		if (!ExecutePkgCmd(Pkg.Cmds.PreUninstall, Sysroot))
 		{
 			fputs("WARNING: Failure exexuting pre-uninstall commands.\n", stderr);
 		}
 	}
 	
-	puts("Deleting files...");
+	Console::SetCurrentAction("Deleting files");
+	
 	//Now delete the files.
 	if (!Package::UninstallFiles(Sysroot, FileListBuf))
 	{
@@ -523,7 +564,7 @@ bool Action::UninstallPackage(const char *PackageID, const char *Arch, const cha
 	//Run post-uninstall commands.
 	if (Pkg.Cmds.PostUninstall)
 	{
-		fputs("Executing post-uninstall commands...\n", stdout);
+		Console::SetCurrentAction("Executing post-uninstall commands");
 		if (!ExecutePkgCmd(Pkg.Cmds.PostUninstall, Sysroot))
 		{
 			fputs("WARNING: Failure exexuting post-uninstall commands.\n", stderr);
@@ -531,11 +572,15 @@ bool Action::UninstallPackage(const char *PackageID, const char *Arch, const cha
 	}
 	
 	//Now remove it from our database.
-	fputs("Updating the package database...\n", stdout);
+	
+	Console::SetCurrentAction("Updating package database");
+	
 	DB::DeletePackage(Pkg.PackageID, Pkg.Arch, Sysroot);
 	
-	printf("Package %s_%s-%u.%s uninstalled successfully.\n", +Pkg.PackageID, +Pkg.VersionString,
+	char Buf[2048];
+	snprintf(Buf, sizeof Buf, "Package %s_%s-%u.%s uninstalled successfully\n", +Pkg.PackageID, +Pkg.VersionString,
 			Pkg.PackageGeneration, +Pkg.Arch);
+	Console::SetCurrentAction(Buf);
 	
 	return true;
 }
