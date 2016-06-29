@@ -18,6 +18,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "packrat.h"
 #include "substrings/substrings.h"
 #include <curl/curl.h>
+#include <unistd.h>
 
 struct FetchStruct
 {
@@ -95,6 +96,7 @@ static bool Fetch_Internal(const PkString &URL_, size_t (*WriteFunction)(void*, 
 
 bool Web::Fetch(const PkString &URL, const PkString &OutPath)
 {
+	unlink(OutPath); //In case it already exists.
 	return Fetch_Internal(URL, FileOutWriteFunction, const_cast<PkString*>(&OutPath));
 }
 

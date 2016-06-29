@@ -175,3 +175,17 @@ bool Files::FileCopy(const char *Source, const char *Destination_, const bool Ov
 	chmod(Destination, Mode);
 	return true;
 }
+
+
+bool Files::RecursiveMkdir(const char *Path, const uid_t UserID, const gid_t GroupID, const int32_t Mode)
+{ //I should probably write my own implementation here, but I'm not going to.
+	bool Success = !system(PkString("mkdir -p ") + Path);
+	
+	if (Success)
+	{
+		chown(Path, UserID, GroupID);
+		chmod(Path, Mode == -1 ? 0755 : Mode);
+	}
+	
+	return Success;
+}

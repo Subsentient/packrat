@@ -3,12 +3,12 @@ CC=gcc
 CXX=g++
 CXXFLAGS=-std=gnu++98 -pedantic -Wall -g3 -O0 -ftrapv -fstrict-aliasing -Wstrict-aliasing -Wno-long-long -fstack-protector
 CFLAGS=-std=gnu99 -pedantic -Wall -g -O3 -ftrapv -fstrict-aliasing -Wstrict-aliasing -fstack-protector
-LDFLAGS=-lcrypto substrings/libsubstrings.a -lsqlite3
+LDFLAGS=-lcrypto substrings/libsubstrings.a -lsqlite3 -lcurl
 #We use libcrypto to compute checksums, and sqlite is our database system.
 
-all: config action main package db files pwsr
+all: config action main package db files pwsr web catalog
 	$(MAKE) -C substrings static
-	$(CXX) config.o action.o main.o package.o db.o files.o passwd_w_sysroot.o $(LDFLAGS) -o ../packrat
+	$(CXX) config.o action.o main.o package.o db.o files.o passwd_w_sysroot.o web.o catalog.o $(LDFLAGS) -o ../packrat
 config:
 	$(CXX) -c $(CXXFLAGS) config.cpp
 main:
@@ -23,6 +23,10 @@ files:
 	$(CXX) -c $(CXXFLAGS) files.cpp 
 pwsr:
 	$(CXX) -c $(CXXFLAGS) passwd_w_sysroot.cpp
+web:
+	$(CXX) -c $(CXXFLAGS) web.cpp
+catalog:
+	$(CXX) -c $(CXXFLAGS) catalog.cpp
 clean:
 	rm -f *.o *.gch packrat
 	$(MAKE) -C substrings clean

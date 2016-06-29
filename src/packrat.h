@@ -33,6 +33,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #define DB_DIRECTORY "/var/packrat/pkgdb/"
 #define DB_TAGS_PATH DB_DIRECTORY "tags/"
 #define DB_MAIN_PATH DB_DIRECTORY "installed.db"
+#define DB_CATALOGS_DIRECTORY DB_DIRECTORY "catalogs/"
 //Structs
 
 
@@ -110,6 +111,7 @@ namespace Config
 {
 	bool ArchPresent(const char *CheckArch);
 	bool LoadConfig(const char *Sysroot);
+	extern std::set<PkString> SupportedArches;
 }
 
 //package.cpp
@@ -134,6 +136,7 @@ namespace Files
 {
 	bool FileCopy(const char *Source, const char *Destination, bool Overwrite, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode);
 	bool Mkdir(const char *Source, const char *Destination, const PkString &Sysroot, const uid_t UserID, const gid_t GroupID, const int32_t Mode);
+	bool RecursiveMkdir(const char *Path, const uid_t UserID, const gid_t GroupID, const int32_t Mode);
 	bool SymlinkCopy(const char *Source, const char *Destination, bool Overwrite, const PkString &Sysroot , const uid_t UserID, const gid_t GroupID);
 	bool TextUserAndGroupToIDs(const char *const User, const char *const Group, uid_t *UIDOut, gid_t *GIDOut);
 }
@@ -164,5 +167,12 @@ namespace Web
 	bool Fetch(const PkString &URL, const PkString &OutPath);
 	PkString Fetch(const PkString &URL);
 }
+
+namespace Catalog
+{
+	bool DownloadCatalogs(const char *Sysroot);
+	extern std::vector<PkString> MirrorDomains;
+}
+
 //Globals
 #endif //_PACKRAT_H_

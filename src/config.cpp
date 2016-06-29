@@ -25,7 +25,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 
 //Globals
-static std::set<PkString> SupportedArches;
+std::set<PkString> Config::SupportedArches;
 
 //Static function prototypes
 static bool ProcessConfig(const char *ConfigStream);
@@ -81,7 +81,7 @@ static bool ProcessConfig(const char *const ConfigStream)
 		
 		if (!strcmp(LineID, "Arch"))
 		{
-			SupportedArches.insert(LineData);
+			Config::SupportedArches.insert(LineData);
 		}
 	}
 	

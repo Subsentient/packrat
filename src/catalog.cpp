@@ -18,31 +18,35 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include "packrat.h"
 #include "substrings/substrings.h"
 
-std::vector<PackageList*> *Deps_GetPackageDeps(const PackageList *InPkg)
+#include <vector>
+
+std::vector<PkString> Catalog::MirrorDomains;
+
+bool Catalog::DownloadCatalogs(const char *Sysroot)
 {
-	if (InPkg->Pkg.Dependencies.size() == 0) return NULL; //Everything's satisfied.
-	const Dependency *Worker = &InPkg->Pkg.Dependencies[0];
-	const Dependency *const Stopper = Worker + InPkg->Pkg.Dependencies.size();
 	
-	std::vector<PackageList*> *List = new std::vector<PackageList*>;
-	
-	List->reserve(InPkg->Pkg.Dependencies.size()); //Guess
-	
-	for (; Worker != Stopper; ++Worker)
-	{	
-		PackageList *Lookup = DB_Lookup(Worker->PackageID, InPkg->Pkg.Arch);
+	bool Succeeded = false;
+	//Try all mirrors until we get one that works.
+	for (size_t Inc = 0; Inc < MirrorDomains.size(); ++Inc)
+	{
+		const PkString &BaseURL = PkString("http://") + MirrorDomains[Inc] + '/';
 		
-		if (!Lookup)
+		std::set<PkString>::iterator Iter = Config::SupportedArches.begin();
+		for (; Iter != Config::SupportedArches.end(); ++Iter)
 		{
-			throw Package::FailedDepsResolve(Worker->PackageID + "." + InPkg->Pkg.Arch);
+			const PkString &URL = BaseURL + *Iter + "/catalog.db";
+			
+			if (!Web::Fetch(URL, PkString(Sysroot) + DB_CATALOGS_DIRECTORY + "catalog." + *Iter + ".db"))
+			{
+				goto NextMirror;
+			}
 		}
 		
-		List->push_back(Lookup);
-		
+		Succeeded = true;
+		break;
+	NextMirror:
+	;
 	}
 	
-	return List;
-}
-std::vector<PackageList*> *Deps_GetPackageDeps(const PkString &PackageID)
-{
+	return Succeeded;
 }
