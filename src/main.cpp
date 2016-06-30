@@ -185,6 +185,12 @@ int main(int argc, char **argv)
 		
 	}
 		
+	//Load configuration.
+	if (!Config::LoadConfig(Sysroot))
+	{
+		fprintf(stderr, "Failed to load packrat configuration.\n");
+		exit(1);
+	}
 	switch (Mode)
 	{
 		case OP_MKDB:
@@ -241,7 +247,7 @@ int main(int argc, char **argv)
 				fputs("Missing arguments. Need at least a package ID, optionally an architecture.\n", stderr);
 				return 1;
 			}
-			return !Action::UninstallPackage(Pkg.PackageID.c_str(), Pkg.Arch.empty() ? NULL : Pkg.Arch.c_str(), Sysroot);
+			return !Action::UninstallPackage(Pkg.PackageID, Pkg.Arch ? Pkg.Arch : *Config::PrimaryArch, Sysroot);
 		}
 		case OP_UPDATE:
 		{

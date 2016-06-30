@@ -26,6 +26,7 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 //Globals
 std::set<PkString> Config::SupportedArches;
+const PkString *Config::PrimaryArch;
 
 //Static function prototypes
 static bool ProcessConfig(const char *ConfigStream);
@@ -57,6 +58,11 @@ bool Config::LoadConfig(const char *Sysroot)
 	ProcessConfig(ConfigStream);
 	
 	delete[] ConfigStream;
+	
+	if (!PrimaryArch)
+	{ //Required.
+		return false;
+	}
 	return true;
 }
 
@@ -78,10 +84,29 @@ static bool ProcessConfig(const char *const ConfigStream)
 		
 		//Get line data.
 		SubStrings.Copy(LineData, Ptr, sizeof LineData);
+		const char *Data = LineData;
 		
-		if (!strcmp(LineID, "Arch"))
+		
+		if (SubStrings.CaseCompare(LineID, "Arch"))
 		{
-			Config::SupportedArches.insert(LineData);
+			const bool Primary = *Data == '@';
+
+			if (Primary)
+			{
+				if (Config::PrimaryArch)
+				{
+					fputs("\nERROR: Two or more primary arches supplied.\n", stderr);
+					return false;
+				}
+				++Data;
+			}
+			
+			Config::SupportedArches.insert(Data);
+			
+			if (Primary)
+			{
+				Config::PrimaryArch = &*Config::SupportedArches.find(Data);
+			}
 		}
 	}
 	

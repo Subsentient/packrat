@@ -86,11 +86,6 @@ bool Action::ReverseInstall(const char *PackageID, const char *Arch, const char 
 { //Turns files from an installation into a package.
 	
 	Console::InitActions();
-	if (!Config::LoadConfig(Sysroot))
-	{
-		fputs("Failed to load packrat configuration.\n", stderr);
-		return false;
-	}
 	
 	PkgObj Pkg;
 	
@@ -201,12 +196,6 @@ bool Action::UpdatePackage(const char *PkgPath, const char *Sysroot)
 	Console::InitActions();
 
 	char Path[4096];
-	
-	if (!Config::LoadConfig(Sysroot))
-	{
-		fputs("Failed to load packrat configuration.\n", stderr);
-		return false;
-	}
 	
 	Console::SetCurrentAction("Mounting package");
 	
@@ -355,13 +344,6 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 	Console::InitActions();
 
 	char Path[4096]; //Will contain a value from Package::MountPackage()
-	
-	//Load configuration.
-	if (!Config::LoadConfig(Sysroot))
-	{
-		fprintf(stderr, "Failed to load packrat configuration.\n");
-		return false;
-	}
 
 	Console::SetCurrentAction("Mounting package");
 	
@@ -509,13 +491,6 @@ bool Action::InstallPackage(const char *PkgPath, const char *Sysroot)
 bool Action::UninstallPackage(const char *PackageID, const char *Arch, const char *Sysroot)
 {
 	Console::InitActions(PkString(PackageID) + (Arch ? +(PkString(".") + Arch) : ""));
-
-	//Load config
-	if (!Config::LoadConfig(Sysroot))
-	{
-		fprintf(stderr, "Failed to load packrat configuration.\n");
-		return false;
-	}
 	
 	if (!Arch && DB::HasMultiArches(PackageID, Sysroot ? Sysroot : ""))
 	{

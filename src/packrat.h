@@ -126,6 +126,7 @@ namespace Config
 	bool ArchPresent(const char *CheckArch);
 	bool LoadConfig(const char *Sysroot);
 	extern std::set<PkString> SupportedArches;
+	extern const PkString *PrimaryArch;
 }
 
 //package.cpp
