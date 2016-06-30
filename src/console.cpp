@@ -48,3 +48,8 @@ void Console::SetActionSubject(const char *InSubject)
 {
 	Subject = InSubject;
 }
+
+void Console::VomitActionError(const char *ErrMsg, FILE *OutDescriptor)
+{
+	fputs(PkString() + "\n" CONSOLE_COLOR_RED "ERROR:" CONSOLE_ENDCOLOR " " + ErrMsg + "\n", OutDescriptor);
+}

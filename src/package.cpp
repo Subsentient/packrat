@@ -489,7 +489,7 @@ bool Package::UninstallFiles(const char *Sysroot, const char *FileListBuf)
 				//Delete it.
 				if (unlink(Path) != 0)
 				{ //Just warn us on failure.
-					fprintf(stderr, "WARNING: Unable to uninstall file \"%s\"\n", +Path);
+					fprintf(stderr, "\nWARNING: Unable to uninstall file \"%s\"\n", +Path);
 				}
 			}
 			default:

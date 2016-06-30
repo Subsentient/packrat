@@ -194,6 +194,7 @@ namespace Console
 	void InitActions(const char *InSubject = "");
 	void SetActionSubject(const char *InSubject = "");
 	void SetCurrentAction(const char *InAction, FILE *OutDescriptor = stdout, const char *Color = NULL);
+	void VomitActionError(const char *ErrMsg, FILE *OutDescriptor = stderr);
 }
 
 //Globals
