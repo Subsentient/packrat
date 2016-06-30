@@ -193,7 +193,7 @@ bool DB::DeletePackage(const PkString &PackageID, const PkString &Arch, const Pk
 	sqlite3_stmt *Statement = NULL;
 	const char *Tail = NULL;
 	
-	const PkString &SQL = "delete from installed where PackageID='" + PackageID + "' and Arch='" + Arch + "';";
+	const PkString &SQL = PkString() + "delete from installed where PackageID='" + PackageID + "' and Arch='" + Arch + "';";
 
 	if (sqlite3_prepare(Handle, SQL, SQL.size(), &Statement, &Tail) != SQLITE_OK)
 	{
