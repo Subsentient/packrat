@@ -247,7 +247,7 @@ int main(int argc, char **argv)
 				fputs("Missing arguments. Need at least a package ID, optionally an architecture.\n", stderr);
 				return 1;
 			}
-			return !Action::UninstallPackage(Pkg.PackageID, Pkg.Arch ? Pkg.Arch : *Config::PrimaryArch, Sysroot);
+			return !Action::UninstallPackage(Pkg.PackageID, Pkg.Arch ? +Pkg.Arch : NULL, Sysroot);
 		}
 		case OP_UPDATE:
 		{

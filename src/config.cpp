@@ -25,7 +25,9 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 
 
 //Globals
-std::set<PkString> Config::SupportedArches;
+static inline std::set<PkString> ArchDefault(void) { std::set<PkString> RetVal; RetVal.insert("noarch"); return RetVal; }
+
+std::set<PkString> Config::SupportedArches = ArchDefault();
 const PkString *Config::PrimaryArch;
 
 //Static function prototypes
@@ -61,8 +63,9 @@ bool Config::LoadConfig(const char *Sysroot)
 	
 	if (!PrimaryArch)
 	{ //Required.
-		return false;
+		PrimaryArch = &*SupportedArches.find("noarch");
 	}
+	
 	return true;
 }
 

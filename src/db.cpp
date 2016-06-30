@@ -282,7 +282,7 @@ bool DB::GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString 
 
 bool DB::LoadPackage(const PkString &PackageID, const PkString &Arch, PkgObj *Out, const PkString &Sysroot)
 { //Does NOT get the file list or checksums, but everything else.
-	if (!PackageID || !Arch || !Out) return false; //Gotta be pretty fucktarded to deliberately do this.
+	if (!PackageID || !Out) return false; //Gotta be pretty fucktarded to deliberately do this.
 	
 	
 	sqlite3 *Handle = NULL;
@@ -292,15 +292,29 @@ bool DB::LoadPackage(const PkString &PackageID, const PkString &Arch, PkgObj *Ou
 		return false;
 	}
 	
-	const PkString &SQL = PkString() + "select PackageID, Arch, VersionString, PackageGeneration, "
-										"Description, PreInstall, PostInstall, PreUninstall, PostUninstall, PreUpdate, PostUpdate "
-										"from installed where PackageID='" + PackageID + "' and Arch='" + Arch + "' limit 1;";
+	PkString SQL;
+	
+	if (Arch)
+	{
+		SQL = PkString() + "select PackageID, Arch, VersionString, PackageGeneration, "
+							"Description, PreInstall, PostInstall, PreUninstall, PostUninstall, PreUpdate, PostUpdate "
+							"from installed where PackageID='" + PackageID + "' and Arch='" + Arch + "' limit 1;";
+	}
+	else
+	{
+		SQL = PkString() + "select PackageID, Arch, VersionString, PackageGeneration, "
+							"Description, PreInstall, PostInstall, PreUninstall, PostUninstall, PreUpdate, PostUpdate "
+							"from installed where PackageID='" + PackageID + "' and (Arch='" + *Config::PrimaryArch + "' or "
+							"Arch='noarch') limit 1;";
+	}
 	sqlite3_stmt *Statement = NULL;
 	const char *Tail = NULL;
 	
 	if (sqlite3_prepare(Handle, SQL, SQL.size(), &Statement, &Tail) != SQLITE_OK)
 	{
 		sqlite3_close(Handle);
+		fputs("Failed to prepare SQL statement", stderr);
+		return false;
 	}
 	
 	int Code = sqlite3_step(Statement);
