@@ -66,9 +66,9 @@ void Action::DeleteTempCacheDir(const char *Path)
 bool Action::CreateTempCacheDir(char *OutBuf, const unsigned OutBufSize, const char *Sysroot)
 {
 	//Build some random numbers to use as part of the temp directory name.
-	unsigned DirNum1 = rand();
-	unsigned DirNum2 = rand();
-	unsigned DirNum3 = rand();
+	const unsigned DirNum1 = rand();
+	const unsigned DirNum2 = rand();
+	const unsigned DirNum3 = rand();
 	
 	snprintf(OutBuf, OutBufSize, "%s/var/packrat/cache/packrat_cache_%u.%u.%u", Sysroot ? Sysroot : "", DirNum1, DirNum2, DirNum3);
 	

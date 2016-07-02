@@ -28,12 +28,13 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <vector>
 #include <map>
 #include <set>
+#include <utility>
 
 #define CONFIGFILE_PATH "/etc/packrat.conf"
 #define DB_DIRECTORY "/var/packrat/pkgdb/"
 #define DB_TAGS_PATH DB_DIRECTORY "tags/"
 #define DB_MAIN_PATH DB_DIRECTORY "installed.db"
-#define DB_CATALOGS_DIRECTORY DB_DIRECTORY "catalogs/"
+#define DB_CATALOGS_DIRECTORY "/var/packrat/catalogs/"
 
 #define CONSOLE_CTL_SAVESTATE "\033[s"
 #define CONSOLE_CTL_RESTORESTATE "\033[u"
@@ -66,7 +67,6 @@ struct PkString : public std::string
 	PkString operator+	(const char Character) 	const 	{ return static_cast<const std::string&>(*this) + Character; }
 	
 	PkString(const char *Stringy) : std::string(Stringy ? Stringy : "") {}
-	PkString(const unsigned char *Stringy) : std::string(Stringy ? (const char*)Stringy : "") {}
 	PkString(const std::string &Stringy) : std::string(Stringy) {}
 	PkString(void) : std::string() {}
 };
@@ -183,9 +183,31 @@ namespace Web
 	PkString Fetch(const PkString &URL);
 }
 
-namespace Catalog
+namespace Catalogs
 {
+	//Types
+	struct CatalogEntry
+	{
+		PkString PackageID;
+		PkString VersionString;
+		PkString Arch;
+		unsigned PackageGeneration;
+		PkString Description;
+		
+		struct DepStruct
+		{
+			PkString PackageID;
+			PkString Arch; //usually it will be the same, but not necessarily.
+		};
+		std::vector<DepStruct> Dependencies;
+	};
+	//Prototypes
 	bool DownloadCatalogs(const char *Sysroot);
+	std::list<CatalogEntry> *SearchCatalogs(const PkString &PackageID, const PkString &Sysroot = NULL);
+	bool InitializeEmptyCatalog(const char *Path);
+	bool AddToCatalog(const char *CatalogFilePath, const CatalogEntry &Entry);
+	
+	//Globals
 	extern std::vector<PkString> MirrorDomains;
 }
 

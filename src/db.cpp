@@ -45,24 +45,24 @@ static const char InstalledDBSchema[] = "create table installed (\n"
 										"Checksums text not null);";
 
 //Prototypes
-static bool ProcessColumn(sqlite3_stmt *Statement, PkgObj *Pkg, const int Index);
+static bool ProcessInstalledDBColumn(sqlite3_stmt *Statement, PkgObj *Pkg, const int Index);
 
 //Function definitions
-static bool ProcessColumn(sqlite3_stmt *Statement, PkgObj *Pkg, const int Index)
+static bool ProcessInstalledDBColumn(sqlite3_stmt *Statement, PkgObj *Pkg, const int Index)
 {
 	const PkString &Name = sqlite3_column_name(Statement, Index);
 	
 	if 		(Name == "PackageID")
 	{
-		Pkg->PackageID = sqlite3_column_text(Statement, Index);
+		Pkg->PackageID = (const char*)sqlite3_column_text(Statement, Index);
 	}
 	else if (Name == "Arch")
 	{
-		Pkg->Arch = sqlite3_column_text(Statement, Index);
+		Pkg->Arch = (const char*)sqlite3_column_text(Statement, Index);
 	}
 	else if (Name == "VersionString")
 	{
-		Pkg->VersionString = sqlite3_column_text(Statement, Index);
+		Pkg->VersionString = (const char*)sqlite3_column_text(Statement, Index);
 	}
 	else if (Name == "PackageGeneration")
 	{
@@ -259,7 +259,7 @@ bool DB::GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString 
 			return false;
 		}
 		
-		*OutFileList = sqlite3_column_text(Statement, 0);
+		*OutFileList = (const char*)sqlite3_column_text(Statement, 0);
 	}
 	
 	if (OutChecksums)
@@ -270,7 +270,7 @@ bool DB::GetFilesInfo(const PkString &PackageID, const PkString &Arch, PkString 
 			return false;
 		}
 		
-		*OutChecksums = sqlite3_column_text(Statement, 1);
+		*OutChecksums = (const char*)sqlite3_column_text(Statement, 1);
 	}
 	
 	sqlite3_finalize(Statement);
@@ -338,7 +338,7 @@ bool DB::LoadPackage(const PkString &PackageID, const PkString &Arch, PkgObj *Ou
 	
 	for (unsigned Inc = 0; Inc < Columns; ++Inc)
 	{
-		if (Out != NULL) ProcessColumn(Statement, Out, Inc); //We can use this to check for existence this way.
+		if (Out != NULL) ProcessInstalledDBColumn(Statement, Out, Inc); //We can use this to check for existence this way.
 	}
 	
 	sqlite3_finalize(Statement);
