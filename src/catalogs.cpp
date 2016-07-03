@@ -30,8 +30,8 @@ bool Catalogs::DownloadCatalogs(const char *Sysroot)
 	bool Succeeded = false;
 	//Try all mirrors until we get one that works.
 	for (size_t Inc = 0; Inc < MirrorDomains.size(); ++Inc)
-	{
-		const PkString &BaseURL = PkString("http://") + MirrorDomains[Inc] + '/';
+	{ //Of the general form "http://wherever.com/pkrt_repo/i586/{catalog.i586.db | packages/ }
+		const PkString &BaseURL = PkString("http://") + MirrorDomains[Inc] + "/pkrt_repo/" + Config::OSRelease + '/';
 		
 		std::set<PkString>::iterator Iter = Config::SupportedArches.begin();
 		for (; Iter != Config::SupportedArches.end(); ++Iter)
@@ -139,7 +139,7 @@ std::list<Catalogs::CatalogEntry> *Catalogs::SearchCatalogs(const PkString &Pack
 					const char *Ptr = (const char*)sqlite3_column_text(Statement, Inc);
 					
 					char Line[2048];
-					char ID[512], Arch[128];
+					char ID[sizeof Line], Arch[sizeof Line];
 					
 					while (SubStrings.Line.GetLine(Line, sizeof Line, &Ptr))
 					{

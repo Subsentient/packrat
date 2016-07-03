@@ -29,6 +29,7 @@ static inline std::set<PkString> ArchDefault(void) { std::set<PkString> RetVal; 
 
 std::set<PkString> Config::SupportedArches = ArchDefault();
 const PkString *Config::PrimaryArch;
+PkString Config::OSRelease;
 
 //Static function prototypes
 static bool ProcessConfig(const char *ConfigStream);
@@ -61,9 +62,16 @@ bool Config::LoadConfig(const char *Sysroot)
 	
 	delete[] ConfigStream;
 	
-	if (!PrimaryArch)
+	if (!PrimaryArch || PrimaryArch == &*Config::SupportedArches.find("noarch"))
 	{ //Required.
-		PrimaryArch = &*SupportedArches.find("noarch");
+		fputs("ERROR: Invalid or missing primary architecture.\n", stderr);
+		return false;
+	}
+	
+	if (!OSRelease)
+	{
+		fputs("ERROR: OS release not specified!\n", stderr);
+		return false;
 	}
 	
 	return true;
@@ -120,6 +128,10 @@ static bool ProcessConfig(const char *const ConfigStream)
 			}
 			
 			Catalogs::MirrorDomains.push_back(LineData);
+		}
+		else if (SubStrings.CaseCompare(LineID, "OSRelease"))
+		{
+			Config::OSRelease = LineData;
 		}
 	}
 	

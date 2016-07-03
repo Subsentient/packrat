@@ -680,7 +680,7 @@ bool Package::VerifyChecksums(const char *ChecksumBuf, const PkString &FilesDir)
 	const char *Iter = ChecksumBuf;
 	
 	//Needs to be this size for Split()
-	char Checksum[4096], Path[4096];
+	char Checksum[sizeof Line], Path[sizeof Line];
 	
 	//Change to files directory.
 
