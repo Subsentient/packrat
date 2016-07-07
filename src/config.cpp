@@ -119,16 +119,6 @@ static bool ProcessConfig(const char *const ConfigStream)
 				Config::PrimaryArch = &*Config::SupportedArches.find(Data);
 			}
 		}
-		else if (SubStrings.CaseCompare(LineID, "MirrorDomain"))
-		{
-			if (!*LineData)
-			{
-				fputs("\nWARNING: Empty MirrorDomain line. This does nothing.\n", stderr);
-				continue;
-			}
-			
-			Catalogs::MirrorDomains.push_back(LineData);
-		}
 		else if (SubStrings.CaseCompare(LineID, "OSRelease"))
 		{
 			Config::OSRelease = LineData;

@@ -45,9 +45,10 @@ namespace Utils
 	class FileSize_Error {};
 	static inline PkString Slurp(const char *Path, const PkString &Sysroot = "") throw(Utils::SlurpFailure);
 	static inline bool WriteFile(const PkString &Filename, const char *Data, const size_t DataSize, const bool Append, const signed Permissions = -1);
-	static inline size_t FileSize(const char *Path, const char *Sysroot = NULL);
+	static inline size_t FileSize(const char *Path, const PkString &Sysroot = NULL);
 	static inline FileListLine BreakdownFileListLine(const PkString &Line);
 	static inline std::list<PkString> *LinesToLinkedList(const char *FileStream);
+	static inline bool IsValidIdentifier(const char *String);
 }
 
 //Functions
@@ -83,11 +84,11 @@ static inline PkString Utils::Slurp(const char *Path, const PkString &Sysroot) t
 	return RetVal;
 }
 
-static inline size_t Utils::FileSize(const char *Path, const char *Sysroot)
+static inline size_t Utils::FileSize(const char *Path, const PkString &Sysroot)
 {
 	struct stat FileStat;
 	
-	PkString NewPath = Sysroot ? PkString(Sysroot) + "/" + Path : PkString(Path);
+	PkString NewPath = Sysroot ? PkString(Sysroot) + '/' + Path : PkString(Path);
 	if (stat(NewPath, &FileStat) != 0)
 	{
 		throw FileSize_Error();
@@ -174,5 +175,11 @@ static inline bool Utils::WriteFile(const PkString &Filename, const char *Data, 
 	}
 	return true;
 }
+
+static inline bool Utils::IsValidIdentifier(const char *String)
+{
+	return strpbrk(String, "-+=[]}{:\"';><,./\\)(*&^%#$@!~`\t ") == NULL;
+}
+
 
 #endif //__PKRT_UTILS_H__

@@ -31,10 +31,11 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <utility>
 
 #define CONFIGFILE_PATH "/etc/packrat.conf"
-#define DB_DIRECTORY "/var/packrat/pkgdb/"
-#define DB_TAGS_PATH DB_DIRECTORY "tags/"
+#define DB_DIRECTORY "/var/packrat/"
 #define DB_MAIN_PATH DB_DIRECTORY "installed.db"
-#define DB_CATALOGS_DIRECTORY "/var/packrat/catalogs/"
+#define REPOS_DIRECTORY "/var/packrat/repos/"
+#define REPO_DESC_FILENAME "info.pkrepo"
+#define REPOS_CATALOGS_DIRECTORY "catalogs/"
 
 #define CONSOLE_CTL_SAVESTATE "\033[s"
 #define CONSOLE_CTL_RESTORESTATE "\033[u"
@@ -185,9 +186,16 @@ namespace Web
 	PkString Fetch(const PkString &URL);
 }
 
-namespace Catalogs
+namespace Repos
 {
 	//Types
+	struct RepoInfo
+	{
+		PkString RepoName;
+		std::vector<PkString> RepoArches;
+		std::vector<PkString> MirrorURLs;
+	};
+	
 	struct CatalogEntry
 	{
 		PkString PackageID;
@@ -203,14 +211,23 @@ namespace Catalogs
 		};
 		std::vector<DepStruct> Dependencies;
 	};
+	
 	//Prototypes
 	bool DownloadCatalogs(const char *Sysroot);
 	std::list<CatalogEntry> *SearchCatalogs(const PkString &PackageID, const PkString &Sysroot = NULL);
 	bool InitializeEmptyCatalog(const char *Path);
 	bool AddToCatalog(const char *CatalogFilePath, const CatalogEntry &Entry);
+	PkString GetCatalogPath(const char *Arch, const char *Sysroot);
+	PkString BuildCatalogURL(const char *MirrorURL, const char *Arch);
+	bool NeedNewCatalog(const char *Arch, const char *MirrorDomain, const PkString &Sysroot = NULL);
+	PkString LoadRepoFile(const char *FilePath);
+	bool LoadRepos(const PkString &Sysroot);
+	RepoInfo *LookupRepo(const PkString &RepoName);
+	std::list<CatalogEntry> *SearchRepoCatalogs(const PkString &RepoName, const PkString &PackageID, const PkString &Sysroot);
 	
 	//Globals
-	extern std::vector<PkString> MirrorDomains;
+	extern std::vector<RepoInfo> RepoList;
+
 }
 
 namespace Console

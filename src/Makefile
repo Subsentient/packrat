@@ -6,9 +6,9 @@ CFLAGS=-std=gnu99 -pedantic -Wall -g -O3 -ftrapv -fstrict-aliasing -Wstrict-alia
 LDFLAGS=-lcrypto substrings/libsubstrings.a -lsqlite3 -lcurl
 #We use libcrypto to compute checksums, and sqlite is our database system.
 
-all: config action main package db files pwsr web catalogs console
+all: config action main package db files pwsr web repos console
 	$(MAKE) -C substrings static
-	$(CXX) config.o action.o main.o package.o db.o files.o passwd_w_sysroot.o web.o catalogs.o console.o $(LDFLAGS) -o ../packrat
+	$(CXX) config.o action.o main.o package.o db.o files.o passwd_w_sysroot.o web.o repos.o console.o $(LDFLAGS) -o ../packrat
 config:
 	$(CXX) -c $(CXXFLAGS) config.cpp
 main:
@@ -25,8 +25,8 @@ pwsr:
 	$(CXX) -c $(CXXFLAGS) passwd_w_sysroot.cpp
 web:
 	$(CXX) -c $(CXXFLAGS) web.cpp
-catalogs:
-	$(CXX) -c $(CXXFLAGS) catalogs.cpp
+repos:
+	$(CXX) -c $(CXXFLAGS) repos.cpp
 console:
 	$(CXX) -c $(CXXFLAGS) console.cpp
 clean:

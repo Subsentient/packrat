@@ -20,13 +20,6 @@ along with Packrat.  If not, see <http://www.gnu.org/licenses/>.*/
 #include <curl/curl.h>
 #include <unistd.h>
 
-struct FetchStruct
-{
-	bool SaveToDisk;
-	PkString Data;
-};
-
-
 static size_t FileOutWriteFunction(void *InStream, size_t PerUnit, size_t Members, void *Data)
 {
 	PkString &Path = *static_cast<PkString*>(Data);
@@ -40,6 +33,11 @@ static size_t FileOutWriteFunction(void *InStream, size_t PerUnit, size_t Member
 	fclose(Desc);
 	
 	return PerUnit * Members;
+}
+
+static int ProgressFunction(void *ProgressObj, double DownloadedTotal, double DownloadedCurrent, double UploadedTotal, double UploadedCurrent)
+{
+	return 0;
 }
 
 static size_t ToStringWriteFunction(void *InStream, size_t PerUnit, size_t Members, void *Data)
@@ -72,6 +70,7 @@ static bool Fetch_Internal(const PkString &URL_, size_t (*WriteFunction)(void*, 
 	
 	unsigned AttemptsRemaining = 3;
 	
+	int TotalTimeElapsed;
 	do
 	{
 		CURL *Curl = curl_easy_init();
@@ -85,6 +84,8 @@ static bool Fetch_Internal(const PkString &URL_, size_t (*WriteFunction)(void*, 
 		curl_easy_setopt(Curl, CURLOPT_TIMEOUT, 5L);
 		curl_easy_setopt(Curl, CURLOPT_WRITEFUNCTION, WriteFunction);
 		curl_easy_setopt(Curl, CURLOPT_WRITEDATA, Data);
+		curl_easy_setopt(Curl, CURLOPT_PROGRESSFUNCTION, ProgressFunction);
+		curl_easy_setopt(Curl, CURLOPT_PROGRESSDATA, &TotalTimeElapsed);
 		
 		Code = curl_easy_perform(Curl);
 		
